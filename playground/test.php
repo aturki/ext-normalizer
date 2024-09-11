@@ -10,6 +10,7 @@ if (!extension_loaded('normalizer')) {
     exit;
 }
 
+ini_set("xdebug.mode", "off");
 
 use Normalizer\Expose;
 use Normalizer\Groups;
@@ -38,8 +39,10 @@ class Address {
     }
 }
 
+#[Expose()]
 class User {
     #[Expose()]
+    // #[SerializedName('customer_name')]
     public string $name;
     #[Expose()]
     public string $email;
@@ -63,6 +66,13 @@ class User {
     public function getAge() {
         return $this->age;
     }
+    public function setAge(int $age) {
+        $this->age = $age;
+    }
+
+    public function setAddresses(array $addresses) {
+        $this->addresses = $addresses;
+    }
 }
 
 $extractor = new PropertyInfoExtractor([new ReflectionExtractor()], [new PhpDocExtractor(), new ReflectionExtractor(),]);
@@ -82,28 +92,29 @@ $user = new User(
     new Address("123 Main St", "Anytown", "12345")
 );
 
-// Normalize the User object
+$users = [];
+for ($i = 0; $i < 10; $i++) {
+    $users[] = $user;
+}
 
-$nativeNormalizationStart = microtime(true);
-$normalized = $nativeNormalizer->normalize($user, [NativeNormalizer::GROUPS => ['GROUP_1', 'GROUP_2']]);
-$nativeNormalizationEnd = microtime(true);
-dump($normalized);
 
 $sfNormalizationStart = microtime(true);
 $normalized = $normalizer->normalize($user);
 $sfNormalizationEnd = microtime(true);
 
-$normalized['roles'] = ['ROLE_3'];
+$nativeNormalizationStart = microtime(true);
+$normalized = $nativeNormalizer->normalize($users, [NativeNormalizer::GROUPS => ['GROUP_1', 'GROUP_2']]);
+$nativeNormalizationEnd = microtime(true);
+// dump($normalized);
 
-// dump("SF Normalizer output",  $normalized);
 
 $nativeDenormalizationStart = microtime(true);
-$denormalized = $nativeNormalizer->denormalize($normalized, User::class);
+$denormalized = $nativeNormalizer->denormalize($normalized, User::class . '[]');
 $nativeDenormalizationEnd = microtime(true);
-dump($denormalized);
+// dump($denormalized);
 
 $sfDenormalizationStart = microtime(true);
-$denormalized = $normalizer->denormalize($normalized, User::class);
+// $denormalized = $normalizer->denormalize($normalized, User::class);
 $sfDenormalizationEnd = microtime(true);
 
 // dump($denormalized);
@@ -122,3 +133,18 @@ echo "Symfony Denormalization: " . sprintf("%fs", ($sfDenormalizationEnd - $sfDe
 
 // Native Denormalization:  0.000002s
 // Symfony Denormalization: 0.002940s
+
+// Features
+// AbstractNormalizer::OBJECT_TO_POPULATE
+// AbstractObjectNormalizer::SKIP_NULL_VALUES
+// AbstractObjectNormalizer::SKIP_UNINITIALIZED_VALUES
+
+// #[MaxDepth(2)]
+// #[SerializedName('customer_name')]
+
+
+// DateTimeNormalizer  RFC3339
+// DateTimeZoneNormalizer
+// DataUriNormalizer
+// DateIntervalNormalizer
+// BackedEnumNormalizer

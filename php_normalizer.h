@@ -24,7 +24,4 @@ PHP_RINIT_FUNCTION(normalizer);
 PHP_RSHUTDOWN_FUNCTION(normalizer);
 PHP_MINFO_FUNCTION(normalizer);
 
-PHP_FUNCTION(normalize_object);
-PHP_FUNCTION(denormalize_object);
-
 #endif	/* PHP_NORMALIZER_H */

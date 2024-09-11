@@ -3,5 +3,5 @@
 ARG_ENABLE("normalizer", "enable normalizer support", "no");
 
 if (PHP_SCALAR_OBJECTS != "no") {
-	EXTENSION("normalizer", "normalizer.c");
+	EXTENSION("normalizer", "php_normalizer.c");
 }

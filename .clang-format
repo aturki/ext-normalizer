@@ -1,0 +1,21 @@
+BasedOnStyle: LLVM
+ColumnLimit: 120
+
+IndentWidth: 4
+UseTab: Never
+TabWidth: 4
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: false
+AllowShortBlocksOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortEnumsOnASingleLine: false
+AllowShortLambdasOnASingleLine: false
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterEnum: true
+  AfterClass: true
+  AfterStruct: true
+  AfterFunction: true
+  AfterControlStatements: false
+  SplitEmptyRecord: false

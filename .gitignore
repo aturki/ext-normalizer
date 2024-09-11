@@ -21,6 +21,7 @@
 *.a
 *.la
 *.lo
+*.dep
 
 # Shared objects (inc. Windows DLLs)
 *.dll
@@ -52,3 +53,9 @@ Mkfile.old
 dkms.conf
 
 playground/vendor
+
+Makefile
+Makefile.fragments
+Makefile.objects
+tests/
+!tests/*.phpt

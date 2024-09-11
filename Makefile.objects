@@ -1,9 +1,0 @@
--include normalizer.dep
-normalizer.lo: /Users/ali/workspace/wyz/projects/wyz-setup-projects/projects/normalizer-extension/normalizer.c
-	$(LIBTOOL) --tag=CC --mode=compile $(CC) -I. -I/Users/ali/workspace/wyz/projects/wyz-setup-projects/projects/normalizer-extension $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS)   -DZEND_COMPILE_DL_EXT=1 -c /Users/ali/workspace/wyz/projects/wyz-setup-projects/projects/normalizer-extension/normalizer.c -o normalizer.lo  -MMD -MF normalizer.dep -MT normalizer.lo
-$(phplibdir)/normalizer.la: ./normalizer.la
-	$(LIBTOOL) --tag=CC --mode=install cp ./normalizer.la $(phplibdir)
-
-./normalizer.la: $(shared_objects_normalizer) $(NORMALIZER_SHARED_DEPENDENCIES)
-	$(LIBTOOL) --tag=CC --mode=link $(CC) -shared $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS) $(LDFLAGS)  -o $@ -export-dynamic -avoid-version -prefer-pic -module -rpath $(phplibdir) $(EXTRA_LDFLAGS) $(shared_objects_normalizer) $(NORMALIZER_SHARED_LIBADD)
-
