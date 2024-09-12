@@ -4840,10 +4840,10 @@ EOF
 
   cat >>Makefile.objects<<EOF
 \$(phplibdir)/normalizer.$suffix: $ext_builddir/normalizer.$suffix
-	\$(LIBTOOL) --tag=CXX --mode=install cp $ext_builddir/normalizer.$suffix \$(phplibdir)
+	\$(LIBTOOL) --tag=CC --mode=install cp $ext_builddir/normalizer.$suffix \$(phplibdir)
 
 $ext_builddir/normalizer.$suffix: \$(shared_objects_normalizer) \$(NORMALIZER_SHARED_DEPENDENCIES)
-	\$(LIBTOOL) --tag=CXX --mode=link \$(CXX) -shared \$(COMMON_FLAGS) \$(CFLAGS_CLEAN) \$(EXTRA_CFLAGS) \$(LDFLAGS) $additional_flags -o \$@ -export-dynamic -avoid-version -prefer-pic -module -rpath \$(phplibdir) \$(EXTRA_LDFLAGS) \$(shared_objects_normalizer) \$(NORMALIZER_SHARED_LIBADD)
+	\$(LIBTOOL) --tag=CC --mode=link \$(CC) -shared \$(COMMON_FLAGS) \$(CFLAGS_CLEAN) \$(EXTRA_CFLAGS) \$(LDFLAGS) $additional_flags -o \$@ -export-dynamic -avoid-version -prefer-pic -module -rpath \$(phplibdir) \$(EXTRA_LDFLAGS) \$(shared_objects_normalizer) \$(NORMALIZER_SHARED_LIBADD)
 
 EOF
 

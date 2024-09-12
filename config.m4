@@ -11,7 +11,7 @@ if test "$PHP_NORMALIZER" != "no"; then
         src/attributes/max_depth_ce.c \
         src/attributes/groups_ce.c \
         src/normalizer/object_normalizer_ce.c,
-        $ext_shared,,,1
+        $ext_shared,,
     )
 
     PHP_ADD_BUILD_DIR($ext_builddir/src, 1)

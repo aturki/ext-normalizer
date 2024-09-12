@@ -57,5 +57,9 @@ playground/vendor
 Makefile
 Makefile.fragments
 Makefile.objects
-tests/
+tests/*
 !tests/*.phpt
+libtool
+*.*~
+*.log
+*.status
