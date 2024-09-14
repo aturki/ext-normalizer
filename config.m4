@@ -7,9 +7,10 @@ if test "$PHP_NORMALIZER" != "no"; then
         normalizer.c \
         src/helpers.c \
         src/attributes/expose_ce.c \
+        src/attributes/groups_ce.c \
         src/attributes/ignore_ce.c \
         src/attributes/max_depth_ce.c \
-        src/attributes/groups_ce.c \
+        src/attributes/serialized_name_ce.c \
         src/normalizer/object_normalizer_ce.c,
         $ext_shared,,
     )

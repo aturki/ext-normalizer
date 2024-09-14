@@ -19,7 +19,7 @@ ZEND_END_ARG_INFO()
 
 void php_register_expose_attribute()
 {
-    zend_class_entry ce, *class_entry;
+    zend_class_entry ce;
 
     zend_function_entry methods[] = {
         PHP_ME(Expose, __construct, arginfo_expose_attribute_construct, ZEND_ACC_PUBLIC)
@@ -27,7 +27,7 @@ void php_register_expose_attribute()
     };
 
     INIT_CLASS_ENTRY(ce, "Normalizer\\Expose", methods);
-    class_entry = zend_register_internal_class(&ce);
+    expose_attribute_class_entry = zend_register_internal_class(&ce);
 
     // zend_string *attribute_name_Attribute_class_Expose =
     //     zend_string_init_interned("Attribute", sizeof("Attribute") - 1, 1);
@@ -38,7 +38,7 @@ void php_register_expose_attribute()
     // ZVAL_LONG(&attribute_Attribute_class_Expose_arg0, ZEND_ATTRIBUTE_TARGET_METHOD | ZEND_ATTRIBUTE_TARGET_PROPERTY);
     // ZVAL_COPY_VALUE(&attribute_Attribute_class_Expose->args[0].value, &attribute_Attribute_class_Expose_arg0);
 
-    class_entry->ce_flags |= ZEND_ACC_FINAL|ZEND_ACC_NO_DYNAMIC_PROPERTIES;
+    expose_attribute_class_entry->ce_flags |= ZEND_ACC_FINAL|ZEND_ACC_NO_DYNAMIC_PROPERTIES;
 
     // zend_declare_class_constant_long(php_ds_vector_ce, STR_AND_LEN("MIN_CAPACITY"), DS_VECTOR_MIN_CAPACITY);
 

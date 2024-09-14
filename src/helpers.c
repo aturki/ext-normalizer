@@ -62,3 +62,53 @@ bool check_array_intersection_string(zval *arr1, zval *arr2)
     }
     return FALSE;
 }
+
+
+void pretty_print_array(zend_array *arr)
+{
+    zend_ulong num_key;
+    zend_string *str_key;
+    zval *value;
+
+    ZEND_HASH_FOREACH_KEY_VAL(arr, num_key, str_key, value)
+    {
+        if (str_key) {
+            printf("Key: %s, Value: ", ZSTR_VAL(str_key));
+        } else {
+            printf("Key: %lu, Value: ", num_key);
+        }
+
+        switch (Z_TYPE_P(value)) {
+            case IS_NULL:
+                printf("NULL\n");
+                break;
+            case IS_LONG:
+                printf("%ld\n", Z_LVAL_P(value));
+                break;
+            case IS_DOUBLE:
+                printf("%f\n", Z_DVAL_P(value));
+                break;
+            case IS_STRING:
+                printf("%s\n", Z_STRVAL_P(value));
+                break;
+            case IS_ARRAY:
+                printf("Array\n");
+                break;
+            case IS_OBJECT:
+                printf("Object\n");
+                break;
+            case IS_TRUE:
+                printf("%s\n""true");
+            case IS_FALSE:
+                printf("%s\n""false");
+                break;
+            case IS_RESOURCE:
+                printf("Resource\n");
+                break;
+            default:
+                printf("Unknown\n");
+                break;
+        }
+    }
+    ZEND_HASH_FOREACH_END();
+}

@@ -40,6 +40,8 @@ PHP_MINIT_FUNCTION(normalizer)
     php_register_expose_attribute();
     php_register_max_depth_attribute();
     php_register_groups_attribute();
+    php_register_serialized_name_attribute();
+
     register_object_normalizer_class();
 
     return SUCCESS;
