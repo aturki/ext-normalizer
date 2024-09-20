@@ -15,16 +15,16 @@
 #define SKIP_UNINITIALIZED_VALUES_NAME "SKIP_UNINITIALIZED_VALUES"
 #define SKIP_UNINITIALIZED_VALUES_VALUE "SKIP_UNINITIALIZED_VALUES"
 
+#define CIRCULAR_REFERENCE_LIMIT_NAME "CIRCULAR_REFERENCE_LIMIT"
+#define DEFAULT_CIRCULAR_REFERENCE_VALUE "CIRCULAR_REFERENCE_LIMIT"
 
-// zval const_GROUPS_value;
-    // zend_string *const_GROUPS_value_str = zend_string_init("groups", strlen("groups"), 1);
-    // ZVAL_STR(&const_GROUPS_value, const_GROUPS_value_str);
-    // zend_string *const_GROUPS_name = zend_string_init("GROUPS", strlen("GROUPS"), 1);
 
-    // zend_declare_typed_class_constant(object_normalizer_class_entry, const_GROUPS_name, &const_GROUPS_value,
-    //                                   ZEND_ACC_PUBLIC, NULL, (zend_type)ZEND_TYPE_INIT_MASK(MAY_BE_STRING));
+#define CIRCULAR_REFERENCE_COUNTERS_NAME "CIRCULAR_REFERENCE_COUNTERS"
 
-    // zend_string_release(const_GROUPS_name);
+
+#define DATE_FORMAT_RFC3339_EXTENDED "Y-m-d\\TH:i:sP"
+
+#define DEFAULT_CIRCULAR_REFERENCE_LIMIT 1
 
 #define DECLARE_CLASS_STRING_CONSTANT(ce, name, value, access_type) \
 do { \

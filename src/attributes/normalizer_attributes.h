@@ -7,4 +7,4 @@
 #include "max_depth_ce.h"
 #include "serialized_name_ce.h"
 
-#endif // NORMALIZER_ATTRIBUTES_H
+#endif  // NORMALIZER_ATTRIBUTES_H

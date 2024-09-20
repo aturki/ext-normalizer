@@ -43,7 +43,37 @@ $ make install
 make
 make test
 ```
+## Features
 
+### Normalization Groups
+```php
+class MyObj
+{
+    #[Groups(['group1', 'group2'])]
+    public string $foo;
+
+    #[Groups(['group4'])]
+    public string $anotherProperty;
+
+    #[Groups(['group3'])]
+    public function getBar() // is* methods are also supported
+    {
+        return $this->bar;
+    }
+}
+
+$normalizer = new Normalizer\ObjectNormalizer();
+
+$obj = new MyObj();
+$obj->foo = 'foo';
+$obj->anotherProperty = 'property';
+
+$array = $normalizer->normalize($obj, [Normalizer\ObjectNormalizer::GROUPS => ['group1', 'group4']]);
+
+// Will return ['foo' => 'foo', 'anotherProperty' => 'property]
+```
+
+### Ignore properties
 ## License
 
 The MIT License (MIT). Please see [LICENSE](LICENSE) for more information.

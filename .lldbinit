@@ -1,0 +1,11 @@
+# Add source directories to help LLDB locate PHP source code
+# settings append target.source-map /path/to/php-src /path/to/php-build
+
+# Define a summary formatter for PHP's zval structure
+type summary add -F zval_formatter php_zval
+
+# Define a custom summary for char * (C strings) to print as a string instead of a pointer
+type summary add -f "${var%s}" "char *"
+
+# Define a custom Python function to visualize zval structures
+command script import .lldb/php_zval_formatter.py

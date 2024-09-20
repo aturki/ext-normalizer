@@ -1,33 +1,61 @@
 #include "php.h"
 #include "ext/standard/php_var.h"
 #include "ext/date/php_date.h"
+#include "ext/spl/php_spl.h"
 #include "zend_attributes.h"
 #include "zend_exceptions.h"
 #include "zend.h"
+#include "zend_enum.h"
 #include "object_normalizer_arginfo.h"
 #include "object_normalizer_ce.h"
 #include "../helpers.h"
 #include "../attributes/normalizer_attributes.h"
 
-#define DATE_FORMAT_RFC3339_EXTENDED "Y-m-d\\TH:i:s.vP"
-#define DEFAULT_CIRCULAR_REFERENCE_LIMIT 1
 
-#define CLEAR_ZVAL(z)                                                                                                  \
-    if (z) {                                                                                                           \
-        zval_ptr_dtor(z);                                                                                              \
-        z = NULL;                                                                                                      \
+#define CLEAR_ZVAL(z)     \
+    if (z) {              \
+        zval_ptr_dtor(z); \
+        z = NULL;         \
     }
 
 zend_class_entry *object_normalizer_class_entry;
+
+/**********************/
+/* internal utilities */
+/**********************/
 
 bool must_normalize(HashTable *attributes, zend_array *context, zval *value);
 zend_string *get_setter_method_name(zend_string *property_name, zend_class_entry *parent_ce);
 zend_string *get_getter_method_name(zend_string *property_name, zend_class_entry *parent_ce);
 zend_string *get_property_class_name(zend_string *property_name, zend_class_entry *parent_ce);
-zend_string *get_normalized_name(zend_string *property_name, HashTable *attributes);
+zend_string *get_normalized_name(zend_string *property_name, HashTable *attributes, bool is_function);
 zend_string *get_property_name_from_normalized_name(zend_string *normalized_name, zend_class_entry *ce);
 bool is_circular_reference(zval *object, zend_array *context);
 void handle_circular_reference(zval *object, zend_array *context, zval *retval);
+
+/*****************************/
+/* normalize value functions */
+/*****************************/
+
+/*******************************/
+/* denormalize value functions */
+/*******************************/
+void denormalize_string_value(zend_string *property_name,
+                              zend_string *property_class_name,
+                              zend_class_entry *ce,
+                              zval *val,
+                              zval *retval);
+void denormalize_long_value(zend_string *property_name,
+                            zend_string *property_class_name,
+                            zend_class_entry *ce,
+                            zval *val,
+                            zval *retval);
+void denormalize_array_value(zend_string *property_name,
+                             zend_string *property_class_name,
+                             zend_class_entry *ce,
+                             zval *val,
+                             zval *retval,
+                             zend_array *context);
 
 void normalize_object(zval *input, zend_array *context, zval *retval)
 {
@@ -44,9 +72,10 @@ void normalize_object(zval *input, zend_array *context, zval *retval)
         }
     } else {
         // if (is_circular_reference(input, context)) {
-        //     handle_circular_reference(input, context, retval);
+        // //     php_printf("Circular reference detected\n");
+        // // //     handle_circular_reference(input, context, retval);
         // }
-        object_properties = zend_get_properties_for(input, ZEND_PROP_PURPOSE_DEBUG);
+        object_properties = Z_OBJ_HANDLER_P(input, get_properties)(Z_OBJ_P(input));
         array_init(retval);
         if (object_properties) {
             zend_ulong num;
@@ -56,6 +85,7 @@ void normalize_object(zval *input, zend_array *context, zval *retval)
 
             ZEND_HASH_FOREACH_KEY_VAL(object_properties, num, key, val)
             {
+                // php_printf("Normalizing property %s of class %s\n", ZSTR_VAL(key), ZSTR_VAL(Z_OBJCE_P(input)->name));
                 zval rv;
                 bool normalize = FALSE;
                 zval *property =
@@ -81,8 +111,8 @@ void normalize_object(zval *input, zend_array *context, zval *retval)
                     }
 
                     if (normalize) {
-                        zend_string *normalized_name = get_normalized_name(
-                            zend_string_init(prop_name, sizeof(prop_name), 0), property_info->attributes);
+                        zend_string *normalized_name =
+                            get_normalized_name(ZSTR_INIT_LITERAL(prop_name, 0), property_info->attributes, FALSE);
                     try_again:
                         if (Z_TYPE_P(val) == IS_NULL || Z_TYPE_P(val) == IS_UNDEF) {
                             add_assoc_null(retval, ZSTR_VAL(normalized_name));
@@ -113,11 +143,21 @@ void normalize_object(zval *input, zend_array *context, zval *retval)
                             }
                         } else if (Z_TYPE_P(val) == IS_OBJECT) {
                             if (zend_class_implements_interface(Z_OBJCE_P(val), php_date_get_interface_ce())) {
-                                add_assoc_string(retval, ZSTR_VAL(normalized_name),
+                                add_assoc_string(retval,
+                                                 ZSTR_VAL(normalized_name),
                                                  ZSTR_VAL(php_format_date(DATE_FORMAT_RFC3339_EXTENDED,
                                                                           sizeof(DATE_FORMAT_RFC3339_EXTENDED) - 1,
                                                                           Z_PHPDATE_P(val)->time->sse,
                                                                           Z_PHPDATE_P(val)->time->is_localtime)));
+                            } else if (zend_class_implements_interface(Z_OBJCE_P(val), zend_ce_backed_enum)) {
+                                zval *case_value = zend_enum_fetch_case_value(Z_OBJ_P(val));
+                                if (Z_OBJCE_P(val)->enum_backing_type == IS_LONG) {
+                                    add_assoc_long(retval, ZSTR_VAL(normalized_name), Z_LVAL_P(case_value));
+                                } else {
+                                    ZEND_ASSERT(Z_OBJCE_P(val)->enum_backing_type == IS_STRING);
+                                    add_assoc_string(retval, ZSTR_VAL(normalized_name), Z_STRVAL_P(case_value));
+                                }
+
                             } else {
                                 zend_string *getter_name = get_getter_method_name(key, Z_OBJCE_P(input));
                                 if (getter_name) {
@@ -126,7 +166,8 @@ void normalize_object(zval *input, zend_array *context, zval *retval)
                                                                              zend_string_tolower(getter_name));
                                     zend_call_known_instance_method_with_0_params(func, Z_OBJ_P(input), &getter_value);
                                     normalize_object(&getter_value, context, &normalized_sub_object);
-                                    add_assoc_array(retval, ZSTR_VAL(normalized_name),
+                                    add_assoc_array(retval,
+                                                    ZSTR_VAL(normalized_name),
                                                     Z_ARRVAL_P(&normalized_sub_object));
                                 } else {
                                     normalize_object(val, context, &normalized_sub_object);
@@ -144,6 +185,20 @@ void normalize_object(zval *input, zend_array *context, zval *retval)
             }
             ZEND_HASH_FOREACH_END();
             zend_release_properties(object_properties);
+
+            zend_array object_methods = Z_OBJCE_P(input)->function_table;
+            zend_function *func;
+            ZEND_HASH_MAP_REVERSE_FOREACH_PTR(&object_methods, func)
+            {
+                zend_string *normalized_name =
+                    get_normalized_name(func->common.function_name, func->common.attributes, TRUE);
+                if ((func->common.fn_flags & ZEND_ACC_PUBLIC) && !(func->common.fn_flags & ZEND_ACC_CTOR)) {
+                    zval rv;
+                    zend_call_method_if_exists(Z_OBJ_P(input), func->common.function_name, &rv, 0, NULL);
+                    add_assoc_zval(retval, ZSTR_VAL(normalized_name), &rv);
+                }
+            }
+            ZEND_HASH_FOREACH_END();
         }
     }
 }
@@ -164,53 +219,157 @@ void denormalize_array(zval *input, zend_array *context, zval *retval, zend_clas
         }
     } else {
         object_init_ex(retval, ce);
+        HashTable *object_properties;
+        object_properties = Z_OBJ_HANDLER_P(retval, get_properties)(Z_OBJ_P(retval));
+        zend_array *args;
+        // array_init_size(args, 0);
+        // zend_call_known_function(ce->constructor, Z_OBJ_P(retval), Z_OBJCE_P(retval), NULL, 0, NULL, args);
         ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(input), key, val)
         {
-            zend_string* property_name = get_property_name_from_normalized_name(key, ce);
-            zend_property_info* property_info = zend_hash_find_ptr(&ce->properties_info, property_name);
+            if (zend_hash_find(object_properties, key) == NULL) {
+                continue;
+            }
+            zend_class_entry *sub_ce = NULL;
+            zend_string *property_name = get_property_name_from_normalized_name(key, ce);
+            zend_property_info *property_info = zend_hash_find_ptr(&ce->properties_info, property_name);
             zend_string *setter_name = get_setter_method_name(property_name, ce);
             zend_string *property_class_name = get_property_class_name(property_name, ce);
 
-            php_printf("Key %s (%s), of class %s\n", ZSTR_VAL(key), property_info->ce->name, ZSTR_VAL(ce->name));
-            if (property_class_name && zend_class_implements_interface(property_info->ce, php_date_get_interface_ce())) {
-                // php_printf("dealing with date\n");
+        try_again:
+            if (Z_TYPE_P(val) == IS_TRUE) {
+                zend_update_property_bool(ce, Z_OBJ_P(retval), ZSTR_VAL(property_name), ZSTR_LEN(property_name), TRUE);
+            } else if (Z_TYPE_P(val) == IS_FALSE) {
+                zend_update_property_bool(ce, Z_OBJ_P(retval), ZSTR_VAL(property_name), ZSTR_LEN(property_name), FALSE);
+            } else if (Z_TYPE_P(val) == IS_LONG) {
+                denormalize_long_value(property_name, property_class_name, ce, val, retval);
+            } else if (Z_TYPE_P(val) == IS_DOUBLE) {
+                zend_update_property_double(ce,
+                                            Z_OBJ_P(retval),
+                                            ZSTR_VAL(property_name),
+                                            ZSTR_LEN(property_name),
+                                            Z_DVAL_P(val));
+            } else if (Z_TYPE_P(val) == IS_STRING) {
+                denormalize_string_value(property_name, property_class_name, ce, val, retval);
+            } else if (Z_TYPE_P(val) == IS_ARRAY) {
+                denormalize_array_value(property_name, property_class_name, ce, val, retval, context);
+            } else if (Z_TYPE_P(val) == IS_REFERENCE) {
+                val = Z_REFVAL_P(val);
+                goto try_again;
             } else {
-            try_again:
-                if (Z_TYPE_P(val) == IS_TRUE) {
-                    zend_update_property_bool(ce, Z_OBJ_P(retval), ZSTR_VAL(property_name), ZSTR_LEN(property_name), TRUE);
-                } else if (Z_TYPE_P(val) == IS_FALSE) {
-                    // php_printf("Key %s (bool), of class %s\n", ZSTR_VAL(key), ZSTR_VAL(ce->name));
-                    zend_update_property_bool(ce, Z_OBJ_P(retval), ZSTR_VAL(property_name), ZSTR_LEN(property_name), FALSE);
-                } else if (Z_TYPE_P(val) == IS_LONG) {
-                    // php_printf("Key %s (long), of class %s\n", ZSTR_VAL(key), ZSTR_VAL(ce->name));
-                    zend_update_property_long(ce, Z_OBJ_P(retval), ZSTR_VAL(property_name), ZSTR_LEN(property_name), Z_LVAL_P(val));
-                } else if (Z_TYPE_P(val) == IS_DOUBLE) {
-                    php_var_dump(val, 10);
-                    // php_printf("Key %s (double), of class %s\n", ZSTR_VAL(key), ZSTR_VAL(ce->name));
-                    zend_update_property_double(ce, Z_OBJ_P(retval), ZSTR_VAL(property_name), ZSTR_LEN(property_name), Z_DVAL_P(val));
-                } else if (Z_TYPE_P(val) == IS_STRING) {
-                    // php_printf("Key %s (string), of class %s\n", ZSTR_VAL(key), ZSTR_VAL(ce->name));
-                    zend_update_property_string(ce, Z_OBJ_P(retval), ZSTR_VAL(property_name), ZSTR_LEN(property_name), Z_STRVAL_P(val));
-                } else if (Z_TYPE_P(val) == IS_ARRAY) {
-                    // php_printf("Key %s (array), of class %s\n", ZSTR_VAL(key), ZSTR_VAL(ce->name));
-
-
-                    // Property should be denormalized as object
-                    if (property_class_name) {
-                        zend_class_entry *sub_ce = zend_lookup_class(property_class_name);
-                        zval r;
-                        denormalize_array(val, context, &r, sub_ce, FALSE);
-                        zend_update_property(ce, Z_OBJ_P(retval), ZSTR_VAL(property_name), ZSTR_LEN(property_name), &r);
-                    }
-                } else if (Z_TYPE_P(val) == IS_REFERENCE) {
-                    val = Z_REFVAL_P(val);
-                    goto try_again;
-                } else {
-                    ZEND_UNREACHABLE();
-                }
+                ZEND_UNREACHABLE();
             }
         }
         ZEND_HASH_FOREACH_END();
+    }
+}
+
+void denormalize_array_value(zend_string *property_name,
+                             zend_string *property_class_name,
+                             zend_class_entry *ce,
+                             zval *val,
+                             zval *retval,
+                             zend_array *context)
+{
+    // Property should be denormalized as object
+    if (property_class_name) {
+        zend_class_entry *sub_ce = zend_lookup_class(property_class_name);
+        // Property should be denormalized as object
+        zval r;
+        denormalize_array(val, context, &r, sub_ce, FALSE);
+        zend_update_property(ce, Z_OBJ_P(retval), ZSTR_VAL(property_name), ZSTR_LEN(property_name), &r);
+    } else {
+        zend_update_property(ce, Z_OBJ_P(retval), ZSTR_VAL(property_name), ZSTR_LEN(property_name), val);
+    }
+}
+
+void denormalize_string_value(zend_string *property_name,
+                              zend_string *property_class_name,
+                              zend_class_entry *ce,
+                              zval *val,
+                              zval *retval)
+{
+    // Property is Enum or Date
+    if (property_class_name) {
+        zend_class_entry *sub_ce = zend_lookup_class(property_class_name);
+        if (sub_ce) {
+            if (zend_class_implements_interface(sub_ce, zend_ce_backed_enum)) {
+                //* Dealing with an Enum
+                zval enum_value, case_value;
+
+                ZVAL_STR(&enum_value, Z_STR_P(val));
+                php_var_dump(&enum_value, 1);
+
+                zend_function *func = zend_hash_find_ptr(&sub_ce->function_table, ZSTR_INIT_LITERAL("tryfrom", 0));
+                if (func != NULL) {
+                    zend_call_known_function(func, NULL, sub_ce, &case_value, 1, &enum_value, NULL);
+
+                    /* Check if return_value is a valid object and is an instance of the enum class */
+                    if (Z_TYPE(case_value) == IS_OBJECT && instanceof_function(Z_OBJCE(case_value), sub_ce)) {
+                        zend_update_property(ce,
+                                             Z_OBJ_P(retval),
+                                             ZSTR_VAL(property_name),
+                                             ZSTR_LEN(property_name),
+                                             &case_value);
+                        zval_ptr_dtor(&enum_value);
+                    } else {
+                        zval_ptr_dtor(&enum_value);
+                        zend_value_error("\"%s\" is not a valid backing value for enum \"%s\"",
+                                         Z_STRVAL_P(val),
+                                         ZSTR_VAL(ce->name));
+                    }
+                }
+            } else if (zend_class_implements_interface(sub_ce, php_date_get_interface_ce())) {
+                //* Dealing with dates represented as strings
+                zval date_value;
+                php_date_instantiate(sub_ce, &date_value);
+                bool success = php_date_initialize(Z_PHPDATE_P(&date_value),
+                                                   Z_STRVAL_P(val),
+                                                   Z_STRLEN_P(val) - 1,
+                                                   DATE_FORMAT_RFC3339_EXTENDED,
+                                                   NULL,
+                                                   PHP_DATE_INIT_FORMAT);
+                zend_update_property(ce,
+                                     Z_OBJ_P(retval),
+                                     ZSTR_VAL(property_name),
+                                     ZSTR_LEN(property_name),
+                                     &date_value);
+            }
+        }
+    } else {
+        // Property is literal string
+        zend_update_property_string(ce,
+                                    Z_OBJ_P(retval),
+                                    ZSTR_VAL(property_name),
+                                    ZSTR_LEN(property_name),
+                                    Z_STRVAL_P(val));
+    }
+}
+
+void denormalize_long_value(zend_string *property_name,
+                            zend_string *property_class_name,
+                            zend_class_entry *ce,
+                            zval *val,
+                            zval *retval)
+{
+    if (property_class_name) {
+        zend_class_entry *sub_ce = zend_lookup_class(property_class_name);
+        if (sub_ce && zend_class_implements_interface(sub_ce, zend_ce_backed_enum)) {
+            // Enum case
+            zval r;
+            if (zend_enum_get_case_by_value(&Z_OBJ(r), sub_ce, Z_LVAL_P(val), zend_long_to_str(Z_LVAL_P(val)), 1)) {
+                zend_update_property_long(ce,
+                                          Z_OBJ_P(retval),
+                                          ZSTR_VAL(property_name),
+                                          ZSTR_LEN(property_name),
+                                          Z_LVAL(r));
+            } else {
+                zend_value_error(ZEND_LONG_FMT " is not a valid backing value for enum %s",
+                                 Z_LVAL_P(val),
+                                 ZSTR_VAL(sub_ce->name));
+            }
+        }
+    } else {
+        zend_update_property_long(ce, Z_OBJ_P(retval), ZSTR_VAL(property_name), ZSTR_LEN(property_name), Z_LVAL_P(val));
     }
 }
 
@@ -219,15 +378,15 @@ bool must_normalize(HashTable *attributes, zend_array *context, zval *value)
     bool normalize = FALSE;
     zval *skip_null_values = NULL;
     zval *skip_uninitialized_values = NULL;
+    zend_attribute *ignore_attribute = NULL;
+    zend_attribute *expose_attribute = NULL;
+    zend_attribute *groups_attribute = NULL;
 
-    zend_attribute *ignore_attribute =
-        zend_get_attribute_str(attributes, IGNORE_ATTRIBUTE, sizeof(IGNORE_ATTRIBUTE) - 1);
+    ignore_attribute = zend_get_attribute_str(attributes, IGNORE_ATTRIBUTE, sizeof(IGNORE_ATTRIBUTE) - 1);
 
-    zend_attribute *expose_attribute =
-        zend_get_attribute_str(attributes, EXPOSE_ATTRIBUTE, sizeof(EXPOSE_ATTRIBUTE) - 1);
+    expose_attribute = zend_get_attribute_str(attributes, EXPOSE_ATTRIBUTE, sizeof(EXPOSE_ATTRIBUTE) - 1);
 
-    zend_attribute *groups_attribute =
-        zend_get_attribute_str(attributes, GROUPS_ATTRIBUTE, sizeof(GROUPS_ATTRIBUTE) - 1);
+    groups_attribute = zend_get_attribute_str(attributes, GROUPS_ATTRIBUTE, sizeof(GROUPS_ATTRIBUTE) - 1);
 
     skip_null_values = zend_hash_str_find(context, SKIP_NULL_VALUES_VALUE, sizeof(SKIP_NULL_VALUES_VALUE) - 1);
     skip_uninitialized_values =
@@ -239,21 +398,19 @@ bool must_normalize(HashTable *attributes, zend_array *context, zval *value)
                Z_TYPE_P(value) == IS_UNDEF) {
         normalize = FALSE;
     } else if (ignore_attribute) {
-        // zval_ptr_dtor(ignore_attribute);
         normalize = FALSE;
     } else if (expose_attribute) {
-        // zval_ptr_dtor(expose_attribute);
         normalize = TRUE;
     } else if (groups_attribute) {
         zend_attribute_arg p = groups_attribute->args[0];
         zval *requested_groups = zend_hash_str_find(context, GROUPS_CONST_VALUE, sizeof(GROUPS_CONST_VALUE) - 1);
         normalize = check_array_intersection_string(&p.value, requested_groups);
-        // zval_ptr_dtor(groups_attribute);
     } else {
         normalize = FALSE;
     }
 
     CLEAR_ZVAL(skip_null_values);
+    CLEAR_ZVAL(skip_uninitialized_values);
 
     return normalize;
 }
@@ -261,17 +418,35 @@ bool must_normalize(HashTable *attributes, zend_array *context, zval *value)
 /**
  * Given a property name, return the normalized name for normalization defined by SerializedName attribute if defined
  */
-zend_string *get_normalized_name(zend_string *property_name, HashTable *attributes)
+zend_string *get_normalized_name(zend_string *property_name, HashTable *attributes, bool is_function)
 {
-    zend_string *normalized_name = NULL;
+    zend_string *normalized_name = property_name;
     zend_attribute *normalized_name_attribute =
         zend_get_attribute_str(attributes, SERIALIZED_NAME_ATTRIBUTE, sizeof(SERIALIZED_NAME_ATTRIBUTE) - 1);
 
     if (normalized_name_attribute) {
         normalized_name = Z_STR(normalized_name_attribute->args[0].value);
+    } else {
+        if (is_function) {
+            //* Dealing with a virtual property
+            int prefix_length = 0;
+            if (zend_string_starts_with_cstr(property_name, "get", 3) ||
+                zend_string_starts_with_cstr(property_name, "has", 3)) {
+                prefix_length = 3;
+            } else if (zend_string_starts_with_cstr(property_name, "is", 2)) {
+                prefix_length = 2;
+            }
+
+            zval rv;
+            ZVAL_STRINGL_FAST(&rv, ZSTR_VAL(property_name) + prefix_length, ZSTR_LEN(property_name) - prefix_length);
+            normalized_name = Z_STR(rv);
+            char *normalized_name_cstr = ZSTR_VAL(normalized_name);
+            zend_tolower_ascii(normalized_name_cstr[0]);
+            normalized_name = zend_string_init_fast(normalized_name_cstr, sizeof(normalized_name_cstr) - 1);
+        }
     }
 
-    return normalized_name != NULL ? normalized_name : property_name;
+    return normalized_name;
 }
 
 /**
@@ -281,19 +456,19 @@ zend_string *get_property_name_from_normalized_name(zend_string *normalized_name
 {
     zend_string *property_name = zend_string_copy(normalized_name);
 
-    for(int i=0; i < ce->properties_info.nNumOfElements; i++)
-    {
+    for (int i = 0; i < ce->properties_info.nNumOfElements; i++) {
         Bucket b = ce->properties_info.arData[i];
-        zend_property_info* property_info = zend_hash_find_ptr(&ce->properties_info, b.key);
+        zend_property_info *property_info = zend_hash_find_ptr(&ce->properties_info, b.key);
         if (property_info) {
-            zend_attribute *normalized_name_attribute = zend_get_attribute_str(property_info->attributes, SERIALIZED_NAME_ATTRIBUTE, sizeof(SERIALIZED_NAME_ATTRIBUTE) - 1);
+            zend_attribute *normalized_name_attribute = zend_get_attribute_str(property_info->attributes,
+                                                                               SERIALIZED_NAME_ATTRIBUTE,
+                                                                               sizeof(SERIALIZED_NAME_ATTRIBUTE) - 1);
             if (normalized_name_attribute) {
                 if (zend_string_equals(normalized_name, Z_STR(normalized_name_attribute->args[0].value))) {
                     property_name = zend_string_copy(b.key);
                     break;
                 }
             }
-
         }
     }
 
@@ -308,12 +483,14 @@ zend_string *get_setter_method_name(zend_string *property_name, zend_class_entry
     if (r == ZSTR_VAL(property_name)[0]) {
         capitalized_property_name = zend_string_copy(property_name);
     } else {
-        capitalized_property_name = zend_string_init(ZSTR_VAL(property_name), ZSTR_LEN(property_name), 0);
+        capitalized_property_name = zend_string_init_fast(ZSTR_VAL(property_name), ZSTR_LEN(property_name));
         ZSTR_VAL(capitalized_property_name)
         [0] = r;
     }
-    setter_name = zend_string_init("set", 3, 0);
-    setter_name = zend_string_concat2(ZSTR_VAL(setter_name), ZSTR_LEN(setter_name), ZSTR_VAL(capitalized_property_name),
+    setter_name = zend_string_init_fast("set", 3);
+    setter_name = zend_string_concat2(ZSTR_VAL(setter_name),
+                                      ZSTR_LEN(setter_name),
+                                      ZSTR_VAL(capitalized_property_name),
                                       ZSTR_LEN(capitalized_property_name));
 
     // zend_string_release(capitalized_property_name);
@@ -328,12 +505,14 @@ zend_string *get_getter_method_name(zend_string *property_name, zend_class_entry
     if (r == ZSTR_VAL(property_name)[0]) {
         capitalized_property_name = zend_string_copy(property_name);
     } else {
-        capitalized_property_name = zend_string_init(ZSTR_VAL(property_name), ZSTR_LEN(property_name), 0);
+        capitalized_property_name = zend_string_init_fast(ZSTR_VAL(property_name), ZSTR_LEN(property_name));
         ZSTR_VAL(capitalized_property_name)
         [0] = r;
     }
-    getter_name = zend_string_init("get", 3, 0);
-    getter_name = zend_string_concat2(ZSTR_VAL(getter_name), ZSTR_LEN(getter_name), ZSTR_VAL(capitalized_property_name),
+    getter_name = zend_string_init_fast("get", 3);
+    getter_name = zend_string_concat2(ZSTR_VAL(getter_name),
+                                      ZSTR_LEN(getter_name),
+                                      ZSTR_VAL(capitalized_property_name),
                                       ZSTR_LEN(capitalized_property_name));
 
     if (zend_hash_exists(&parent_ce->function_table, zend_string_tolower(getter_name))) {
@@ -357,39 +536,54 @@ zend_string *get_property_class_name(zend_string *property_name, zend_class_entr
     return class_name;
 }
 
-bool is_circular_reference(zval *object, HashTable *context)
+bool is_circular_reference(zval *object, zend_array *context)
 {
-    // zend_string *object_hash = zend_object_hash(Z_OBJ_P(object));
+    zend_string *object_hash = php_spl_object_hash(Z_OBJ_P(object));
+    php_printf("Checking for Circular reference %s\n", ZSTR_VAL(object_hash));
 
-    // zval *circular_reference_limit =
-    //     zend_hash_str_find(context, "circular_reference_limit", sizeof("circular_reference_limit") - 1);
-    // int limit = Z_TYPE_P(circular_reference_limit) == IS_LONG ? Z_LVAL_P(circular_reference_limit)
-    //                                                           : DEFAULT_CIRCULAR_REFERENCE_LIMIT;
+    zval *circular_reference_limit = zend_hash_find(context, ZSTR_INIT_LITERAL(CIRCULAR_REFERENCE_LIMIT_NAME, 0));
 
-    // zval *counters =
-    //     zend_hash_str_find(context, "circular_reference_counters", sizeof("circular_reference_counters") - 1);
-    // zval *counter = zend_hash_find(counters, object_hash);
+    int limit = (circular_reference_limit && (Z_TYPE_P(circular_reference_limit) == IS_LONG))
+                    ? Z_LVAL_P(circular_reference_limit)
+                    : DEFAULT_CIRCULAR_REFERENCE_LIMIT;
 
-    // if (counter != NULL) {
-    //     if (Z_TYPE_P(counter) == IS_LONG && Z_LVAL_P(counter) >= limit) {
-    //         zend_hash_del(counters, object_hash);
-    //         return 1;
-    //     }
+    zval *counters = zend_hash_find(context, ZSTR_INIT_LITERAL(CIRCULAR_REFERENCE_COUNTERS_NAME, 0));
 
-    //     Z_LVAL_P(counter)++;
-    // } else {
-    //     zval new_counter;
-    //     ZVAL_LONG(&new_counter, 1);
-    //     zend_hash_add(counters, object_hash, &new_counter);
-    // }
+    if (counters == NULL) {
+        // zend_hash_real_init(counters, 1);
+        counters = emalloc(sizeof(zval));
+        ZVAL_UNDEF(counters);
+        array_init(counters);
+    }
 
-    return 0;
+    zval *counter = zend_hash_find(Z_ARRVAL_P(counters), object_hash);
+    if (counter != NULL) {
+        if (Z_TYPE_P(counter) == IS_LONG && Z_LVAL_P(counter) >= limit) {
+            zend_hash_del(counters, object_hash);
+            php_printf("\t\t\t\t\tCircular reference detected\n");
+            return TRUE;
+        }
+
+        Z_LVAL_P(counter)++;
+        // php_printf("\t\tIncrementing value\n");
+        zend_hash_update(Z_ARR_P(counters), object_hash, counter);
+        zend_hash_update(context, ZSTR_INIT_LITERAL(CIRCULAR_REFERENCE_COUNTERS_NAME, 0), counters);
+    } else {
+        zval new_counter;
+        ZVAL_LONG(&new_counter, 1);
+        // php_printf("\t\tNew value\n");
+        zend_hash_add_new(Z_ARR_P(counters), object_hash, &new_counter);
+        // php_var_dump(counters, 1);
+        zend_hash_update(context, ZSTR_INIT_LITERAL(CIRCULAR_REFERENCE_COUNTERS_NAME, 0), counters);
+    }
+
+    return FALSE;
 }
 
 void handle_circular_reference(zval *object, zend_array *context, zval *retval)
 {
-    // zval *circular_reference_handler = zend_hash_str_find(context, "circular_reference_handler", sizeof("circular_reference_handler") - 1);
-    // if (circular_reference_handler != NULL) {
+    // zval *circular_reference_handler = zend_hash_str_find(context, "circular_reference_handler",
+    // sizeof("circular_reference_handler") - 1); if (circular_reference_handler != NULL) {
     //     zval retval;
     //     zval params[2];
     //     char *is_callable_error = NULL;
@@ -401,7 +595,8 @@ void handle_circular_reference(zval *object, zend_array *context, zval *retval)
 
     //     ZVAL_COPY(&params[0], object);
     //     ZVAL_COPY(&params[1], context);
-    //     if (zend_fcall_info_init(circular_reference_handler, 0, &fci, &fci_cache,NULL , &is_callable_error) == FAILURE) {
+    //     if (zend_fcall_info_init(circular_reference_handler, 0, &fci, &fci_cache,NULL , &is_callable_error) ==
+    //     FAILURE) {
     //         if (is_callable_error) {
     //             zend_type_error("%s", is_callable_error);
     //             // efree(is_callable_error);
@@ -417,14 +612,18 @@ void handle_circular_reference(zval *object, zend_array *context, zval *retval)
     // }
 
     // zend_string *class_name = Z_OBJCE_P(object)->name;
-    // zval *circularReferenceLimit = zend_hash_str_find(context, "circular_reference_limit", sizeof("circular_reference_limit") - 1);
-    // int limit = circularReferenceLimit != NULL && Z_TYPE_P(circularReferenceLimit) == IS_LONG ? Z_LVAL_P(circularReferenceLimit) : DEFAULT_CIRCULAR_REFERENCE_LIMIT;
+    // zval *circularReferenceLimit = zend_hash_str_find(context, "circular_reference_limit",
+    // sizeof("circular_reference_limit") - 1); int limit = circularReferenceLimit != NULL &&
+    // Z_TYPE_P(circularReferenceLimit) == IS_LONG ? Z_LVAL_P(circularReferenceLimit) :
+    // DEFAULT_CIRCULAR_REFERENCE_LIMIT;
 
-    // zend_string *message = zend_string_init("A circular reference has been detected when serializing the object of class \"", sizeof("A circular reference has been detected when serializing the object of class \"") - 1 + ZSTR_LEN(class_name) + sizeof("\" (configured limit: ") - 1 + sizeof(").") - 1, 0);
-    // zend_string *debug_type = zend_get_debug_type(Z_OBJ_P(object));
-    // zend_string *limit_str = zend_long_to_str(limit);
-    // zend_string *formatted_message = zend_string_alloc(ZSTR_LEN(message) + ZSTR_LEN(debug_type) + ZSTR_LEN(limit_str), 0);
-    // sprintf(ZSTR_VAL(formatted_message), "A circular reference has been detected when serializing the object of class  %s%s\" (configured limit: %d).", ZSTR_VAL(message), ZSTR_VAL(debug_type), DEFAULT_CIRCULAR_REFERENCE_LIMIT);
+    // zend_string *message = zend_string_init("A circular reference has been detected when serializing the object of
+    // class \"", sizeof("A circular reference has been detected when serializing the object of class \"") - 1 +
+    // ZSTR_LEN(class_name) + sizeof("\" (configured limit: ") - 1 + sizeof(").") - 1, 0); zend_string *debug_type =
+    // zend_get_debug_type(Z_OBJ_P(object)); zend_string *limit_str = zend_long_to_str(limit); zend_string
+    // *formatted_message = zend_string_alloc(ZSTR_LEN(message) + ZSTR_LEN(debug_type) + ZSTR_LEN(limit_str), 0);
+    // sprintf(ZSTR_VAL(formatted_message), "A circular reference has been detected when serializing the object of class
+    // %s%s\" (configured limit: %d).", ZSTR_VAL(message), ZSTR_VAL(debug_type), DEFAULT_CIRCULAR_REFERENCE_LIMIT);
 
     // zend_throw_exception_ex(NULL, 0, "%s", ZSTR_VAL(formatted_message));
 
@@ -434,23 +633,19 @@ void handle_circular_reference(zval *object, zend_array *context, zval *retval)
     // zend_string_release(formatted_message);
 }
 
-ZEND_METHOD(ObjectNormalizer, __construct)
-{
-    ZEND_PARSE_PARAMETERS_NONE();
-}
+ZEND_METHOD(ObjectNormalizer, __construct) { ZEND_PARSE_PARAMETERS_NONE(); }
 
 // Function to normalize an object to an array
 ZEND_METHOD(ObjectNormalizer, normalize)
 {
     zval *obj;
-    zval *context;
+    zval *context = NULL;
 
     ZEND_PARSE_PARAMETERS_START(1, 2)
-        Z_PARAM_ZVAL(obj)
-        Z_PARAM_OPTIONAL
-        Z_PARAM_ARRAY(context)
+    Z_PARAM_ZVAL(obj)
+    Z_PARAM_OPTIONAL
+    Z_PARAM_ARRAY(context)
     ZEND_PARSE_PARAMETERS_END();
-
 
     if (context == NULL) {
         context = emalloc(sizeof(zval));
@@ -458,7 +653,7 @@ ZEND_METHOD(ObjectNormalizer, normalize)
         array_init(context);
     }
 
-    normalize_object(obj, Z_ARRVAL_P(context), return_value); // Pass return_value to store result
+    normalize_object(obj, Z_ARRVAL_P(context), return_value);
 }
 
 // Function to denormalize an array back to an object
@@ -490,31 +685,34 @@ ZEND_METHOD(ObjectNormalizer, denormalize)
         is_array = TRUE;
     }
 
-    cname = zend_string_init(className, strlen(className), 0);
+    cname = zend_string_init_fast(className, strlen(className));
     ce = zend_lookup_class(cname);
+
+    if (ce->ce_flags & ZEND_ACC_INTERFACE) {
+        zend_throw_error(zend_ce_value_error, "Can not instantiate object from interface \"%s\".", ZSTR_VAL(ce->name));
+        RETURN_THROWS();
+    }
+    if (ce->ce_flags & (ZEND_ACC_IMPLICIT_ABSTRACT_CLASS | ZEND_ACC_EXPLICIT_ABSTRACT_CLASS)) {
+        zend_throw_error(zend_ce_value_error,
+                         "Can not instantiate object from abstract class \"%s\".",
+                         ZSTR_VAL(ce->name));
+        RETURN_THROWS();
+    }
+    if (ce->ce_flags & ZEND_ACC_TRAIT) {
+        zend_throw_error(zend_ce_value_error, "Can not instantiate object from trait \"%s\".", ZSTR_VAL(ce->name));
+        RETURN_THROWS();
+    }
+    if (ce->ce_flags & ZEND_ACC_ENUM) {
+        zend_throw_error(zend_ce_value_error, "Can not instantiate object from enum \"%s\".", ZSTR_VAL(ce->name));
+        RETURN_THROWS();
+    }
 
     denormalize_array(arr, Z_ARRVAL_P(context), return_value, ce, is_array);
 
     // efree(context);
     // efree(arr);
     // zend_string_release(cname);
-
 }
-
-// ZEND_BEGIN_ARG_INFO(arginfo_object_normalizer___construct, 0)
-// ZEND_END_ARG_INFO()
-
-// ZEND_BEGIN_ARG_WITH_RETURN_TYPE_MASK_EX(arginfo_object_normalizer_normalize, 0, 1, MAY_BE_ARRAY)
-// ZEND_ARG_TYPE_INFO(0, obj, IS_MIXED, 0)
-// ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, context, IS_ARRAY, 0, "[]")
-// ZEND_END_ARG_INFO()
-
-// // Arginfo for denormalize_array()
-// ZEND_BEGIN_ARG_WITH_RETURN_TYPE_MASK_EX(arginfo_object_normalizer_denormalize, 0, 2, MAY_BE_OBJECT)
-// ZEND_ARG_TYPE_INFO(0, arr, IS_MIXED, 0)
-// ZEND_ARG_TYPE_INFO(0, className, IS_STRING, 0)
-// ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, context, IS_ARRAY, 0, "[]")
-// ZEND_END_ARG_INFO()
 
 void register_object_normalizer_class()
 {
@@ -523,16 +721,22 @@ void register_object_normalizer_class()
     static const zend_function_entry object_normalizer_methods[] = {
         PHP_ME(ObjectNormalizer, __construct, arginfo_class_Normalizer_ObjectNormalizer___construct, ZEND_ACC_PUBLIC)
             PHP_ME(ObjectNormalizer, normalize, arginfo_class_Normalizer_ObjectNormalizer_normalize, ZEND_ACC_PUBLIC)
-                PHP_ME(ObjectNormalizer, denormalize, arginfo_class_Normalizer_ObjectNormalizer_denormalize, ZEND_ACC_PUBLIC)
-                    PHP_FE_END};
+                PHP_ME(ObjectNormalizer,
+                       denormalize,
+                       arginfo_class_Normalizer_ObjectNormalizer_denormalize,
+                       ZEND_ACC_PUBLIC) PHP_FE_END};
 
     INIT_CLASS_ENTRY(object_normalizer_ce, "Normalizer\\ObjectNormalizer", object_normalizer_methods);
     object_normalizer_class_entry = zend_register_internal_class(&object_normalizer_ce);
 
     DECLARE_CLASS_STRING_CONSTANT(object_normalizer_class_entry, GROUPS, GROUPS, ZEND_ACC_PUBLIC);
-    DECLARE_CLASS_STRING_CONSTANT(object_normalizer_class_entry, OBJECT_TO_POPULATE, OBJECT_TO_POPULATE,
+    DECLARE_CLASS_STRING_CONSTANT(object_normalizer_class_entry,
+                                  OBJECT_TO_POPULATE,
+                                  OBJECT_TO_POPULATE,
                                   ZEND_ACC_PUBLIC);
     DECLARE_CLASS_STRING_CONSTANT(object_normalizer_class_entry, SKIP_NULL_VALUES, SKIP_NULL_VALUES, ZEND_ACC_PUBLIC);
-    DECLARE_CLASS_STRING_CONSTANT(object_normalizer_class_entry, SKIP_UNINITIALIZED_VALUES, SKIP_UNINITIALIZED_VALUES,
+    DECLARE_CLASS_STRING_CONSTANT(object_normalizer_class_entry,
+                                  SKIP_UNINITIALIZED_VALUES,
+                                  SKIP_UNINITIALIZED_VALUES,
                                   ZEND_ACC_PUBLIC);
 }
