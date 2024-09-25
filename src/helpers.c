@@ -21,7 +21,6 @@ char *extract_template_type(const char *input)
     static char result[100];
     const char *last_comma = strrchr(input, ',');
     const char *open_bracket = strrchr(input, '<');
-    const char *close_bracket = strrchr(input, '>');
 
     // If there is a comma, extract the type after the last comma
     if (last_comma) {
@@ -58,4 +57,15 @@ bool check_array_intersection_string(zval *arr1, zval *arr2)
         }
     }
     return FALSE;
+}
+
+
+void print_array(zend_array* arr)
+{
+    for (int i = 0; i < arr->nNumOfElements; ++i)
+    {
+        Bucket b = arr->arData[i];
+
+        php_printf("{%s: %s}\n", ZSTR_VAL(b.key), ZSTR_VAL(b.val.value.str));
+    }
 }

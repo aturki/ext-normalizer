@@ -10,5 +10,5 @@
 void trim(char *str);
 char *extract_template_type(const char *input);
 bool check_array_intersection_string(zval *arr1, zval *arr2);
-
+void print_array(zend_array* arr);
 #endif  // HELPERS_H
