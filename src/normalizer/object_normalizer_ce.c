@@ -35,36 +35,6 @@ void handle_circular_reference(zval *object, zend_array *context, zval *retval);
 zend_array *get_object_properties(zval *object);
 zend_string *get_unmangled_property_name(zend_string *name);
 
-// static void set_property(zend_object *object, zend_string *key, zval *prop_val)
-// {
-// 	if (ZSTR_LEN(key) > 0 && ZSTR_VAL(key)[0] == '\0') { // not public
-// 		const char *class_name, *prop_name;
-// 		size_t prop_name_len;
-
-// 		if (zend_unmangle_property_name_ex(key, &class_name, &prop_name, &prop_name_len) == SUCCESS) {
-// 			if (class_name[0] != '*') { // private
-// 				zend_string *cname;
-// 				zend_class_entry *ce;
-
-// 				cname = zend_string_init(class_name, strlen(class_name), 0);
-// 				ce = zend_lookup_class(cname);
-
-// 				if (ce) {
-// 					zend_update_property(ce, object, prop_name, prop_name_len, prop_val);
-// 				}
-
-// 				zend_string_release_ex(cname, 0);
-// 			} else { // protected
-// 				zend_update_property(object->ce, object, prop_name, prop_name_len, prop_val);
-// 			}
-// 		}
-// 		return;
-// 	}
-
-// 	// public
-// 	zend_update_property(object->ce, object, ZSTR_VAL(key), ZSTR_LEN(key), prop_val);
-// }
-
 /*****************************/
 /* normalize value functions */
 /*****************************/
@@ -236,22 +206,30 @@ void normalize_object(zval *input, zend_array *context, zval *retval)
     }
 }
 
-void denormalize_array(zval *input, zend_array *context, zval *retval, zend_class_entry *ce, bool is_array)
+void denormalize_array(zval *input,
+                       zend_array *context,
+                       zval *retval,
+                       zend_class_entry *ce,
+                       bool is_array,
+                       bool do_init)
 {
-    zend_string *key;
-    zend_ulong num;
-    zval *val;
-
     if (is_array) {
         array_init_size(retval, Z_ARRVAL_P(input)->nNumOfElements);
         zval r, tmp;
         for (int i = 0; i < Z_ARRVAL_P(input)->nNumOfElements; i++) {
             zval t = Z_ARRVAL_P(input)->arPacked[i];
-            denormalize_array(&t, context, &r, ce, FALSE);
+            denormalize_array(&t, context, &r, ce, FALSE, TRUE);
             add_index_object(retval, i, Z_OBJ(r));
+            zval_ptr_dtor(&t);
         }
     } else {
-        object_init_ex(retval, ce);
+        zend_string *key;
+        zend_ulong num;
+        zval *val;
+
+        if (do_init) {
+            object_init_ex(retval, ce);
+        }
         HashTable *object_properties = zend_std_get_properties(Z_OBJ_P(retval));
 
         ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(input), key, val)
@@ -322,7 +300,7 @@ void denormalize_array_value(zend_string *property_name,
         zend_class_entry *sub_ce = zend_lookup_class(property_class_name);
         // Property should be denormalized as object
         zval r;
-        denormalize_array(val, context, &r, sub_ce, FALSE);
+        denormalize_array(val, context, &r, sub_ce, FALSE, TRUE);
         zend_update_property(ce, Z_OBJ_P(retval), ZSTR_VAL(property_name), ZSTR_LEN(property_name), &r);
         zval_ptr_dtor(&r);
     } else {
@@ -400,21 +378,29 @@ void denormalize_long_value(zend_string *property_name,
 {
     if (property_class_name) {
         zend_class_entry *sub_ce = zend_lookup_class(property_class_name);
-        if (sub_ce && zend_class_implements_interface(sub_ce, zend_ce_backed_enum)) {
-            // Enum case
-            zval r;
-            ZVAL_UNDEF(&r);
-            if (zend_enum_get_case_by_value(&Z_OBJ(r), sub_ce, Z_LVAL_P(val), zend_long_to_str(Z_LVAL_P(val)), 1)) {
-                zend_update_property_long(ce,
-                                          Z_OBJ_P(retval),
-                                          ZSTR_VAL(property_name),
-                                          ZSTR_LEN(property_name),
-                                          Z_LVAL(r));
-                zval_ptr_dtor(&r);
-            } else {
-                zend_value_error(ZEND_LONG_FMT " is not a valid backing value for enum %s",
-                                 Z_LVAL_P(val),
-                                 ZSTR_VAL(sub_ce->name));
+        if (zend_class_implements_interface(sub_ce, zend_ce_backed_enum)) {
+            //* Dealing with an Enum
+            zval enum_value, case_value;
+            ZVAL_LONG(&enum_value, Z_LVAL_P(val));
+
+            zend_function *func = zend_hash_find_ptr(&sub_ce->function_table, ZSTR_INIT_LITERAL("tryfrom", 0));
+            if (func != NULL) {
+                zend_call_known_function(func, NULL, sub_ce, &case_value, 1, &enum_value, NULL);
+
+                /* Check if return_value is a valid object and is an instance of the enum class */
+                if (Z_TYPE(case_value) == IS_OBJECT && instanceof_function(Z_OBJCE(case_value), sub_ce)) {
+                    zend_update_property(ce,
+                                         Z_OBJ_P(retval),
+                                         ZSTR_VAL(property_name),
+                                         ZSTR_LEN(property_name),
+                                         &case_value);
+                } else {
+                    zend_value_error("\"%lld\" is not a valid backing value for enum \"%s\"",
+                                     Z_LVAL_P(val),
+                                     ZSTR_VAL(ce->name));
+                }
+                zval_ptr_dtor(&enum_value);
+                zval_ptr_dtor(&case_value);
             }
         }
     } else {
@@ -790,8 +776,8 @@ ZEND_METHOD(ObjectNormalizer, denormalize)
     zval *arr;
     zval *context;
     size_t class_name_len;
-    zend_string *cname;
-    zend_class_entry *ce;
+    zend_string *cname = NULL;
+    zend_class_entry *ce = NULL;
     bool is_array = FALSE;
     bool created = FALSE;
 
@@ -816,6 +802,7 @@ ZEND_METHOD(ObjectNormalizer, denormalize)
 
     cname = zend_string_init_fast(class_name_cstr, strlen(class_name_cstr));
     ce = zend_lookup_class(cname);
+
     if (!ce) {
         zend_throw_error(zend_ce_value_error, "Undefined class \"%s\".", ZSTR_VAL(cname));
         RETURN_THROWS();
@@ -839,7 +826,13 @@ ZEND_METHOD(ObjectNormalizer, denormalize)
         RETURN_THROWS();
     }
 
-    denormalize_array(arr, Z_ARRVAL_P(context), return_value, ce, is_array);
+    zval *object_to_populate = zend_hash_find(Z_ARRVAL_P(context), ZSTR_INIT_LITERAL(OBJECT_TO_POPULATE, 0));
+    if (object_to_populate) {
+        *return_value = *object_to_populate;
+        denormalize_array(arr, Z_ARRVAL_P(context), return_value, ce, is_array, FALSE);
+    } else {
+        denormalize_array(arr, Z_ARRVAL_P(context), return_value, ce, is_array, TRUE);
+    }
 
     if (created) {
         efree(context);

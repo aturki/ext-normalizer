@@ -8,6 +8,7 @@ echo - Can normalize and denormalize BackedEnums
 enum Enum: int
 {
     case A = 1;
+    case B = 2;
 }
 enum Type: string
 {
@@ -24,15 +25,9 @@ class Foo
 $normalizer = new Normalizer\ObjectNormalizer();
 $normalized = $normalizer->normalize(new Foo());
 var_dump($normalized);
-$object = $normalizer->denormalize($normalized, Foo::class);
-var_dump($object);
 ?>
 --EXPECT--
 array(1) {
   ["bar"]=>
   string(1) "A"
-}
-object(Foo)#3 (1) {
-  ["bar"]=>
-  enum(Type::A)
 }

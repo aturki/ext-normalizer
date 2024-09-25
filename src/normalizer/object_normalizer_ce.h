@@ -6,8 +6,7 @@
 #define GROUPS_CONST_NAME "GROUPS"
 #define GROUPS_CONST_VALUE "GROUPS"
 
-#define OBJECT_TO_POPULATE_NAME "OBJECT_TO_POPULATE"
-#define OBJECT_TO_POPULATE_VALUE "OBJECT_TO_POPULATE"
+#define OBJECT_TO_POPULATE "OBJECT_TO_POPULATE"
 
 #define SKIP_NULL_VALUES_NAME "SKIP_NULL_VALUES"
 #define SKIP_NULL_VALUES_VALUE "SKIP_NULL_VALUES"
@@ -40,7 +39,7 @@ do { \
 extern zend_class_entry *object_normalizer_class_entry;
 
 void normalize_object(zval *obj, zend_array *context, zval *retval);
-void denormalize_array(zval *input, zend_array *context, zval *obj, zend_class_entry *ce, bool is_array);
+void denormalize_array(zval *input, zend_array *context, zval *obj, zend_class_entry *ce, bool is_array, bool do_init);
 
 void register_object_normalizer_class();
 
