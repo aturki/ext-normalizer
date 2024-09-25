@@ -34,19 +34,11 @@ var_dump($object);
 
 ?>
 --EXPECT--
-object(Dummy)#2 (3) {
-  ["one"]=>
-  object(One)#3 (2) {
-    ["two"]=>
-    object(Two)#4 (1) {
-      ["three"]=>
-      string(3) "foo"
-    }
-    ["four"]=>
-    string(4) "quux"
-  }
-  ["foo"]=>
-  string(6) "notfoo"
-  ["baz"]=>
-  string(3) "baz"
+object(ChildClass)#2 (3) {
+  ["public"]=>
+  string(6) "public"
+  ["protected":protected]=>
+  string(9) "protected"
+  ["private":"ParentClass":private]=>
+  string(7) "private"
 }

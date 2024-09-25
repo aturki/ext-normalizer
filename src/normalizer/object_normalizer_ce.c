@@ -252,85 +252,61 @@ void denormalize_array(zval *input, zend_array *context, zval *retval, zend_clas
         }
     } else {
         object_init_ex(retval, ce);
-        // HashTable *object_properties = Z_OBJ_HANDLER_P(retval, get_properties)(Z_OBJ_P(retval));
-        HashTable *object_properties =zend_std_get_properties(retval);
+        HashTable *object_properties = zend_std_get_properties(Z_OBJ_P(retval));
 
-    //     ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(input), key, val)
-    //     {
-    //         zend_string *property_name = get_property_name_from_normalized_name(key, ce);
-    //         zend_property_info *property_info = zend_hash_find_ptr(&ce->properties_info, property_name);
-    //         zend_string *setter_name = get_setter_method_name(property_name, ce);
-    //         zend_string *property_class_name = get_property_class_name(property_name, ce);
-    //         zend_class_entry* property_ce = ce;
+        ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(input), key, val)
+        {
+            zend_string *property_name = get_property_name_from_normalized_name(key, ce);
+            zend_property_info *property_info = zend_hash_find_ptr(&ce->properties_info, property_name);
+            zend_string *setter_name = get_setter_method_name(property_name, ce);
+            zend_function *setter_func = zend_hash_find_ptr(&ce->function_table, setter_name);
+            bool setter_exists_and_accessible = setter_func != NULL && (setter_func->common.fn_flags & ZEND_ACC_PUBLIC);
+            zend_string *property_class_name = get_property_class_name(property_name, ce);
+            zend_class_entry *property_ce = ce;
 
-    //         if (property_info != NULL) {
-    //             // Check the visibility flags
-    //             if (property_info->flags & ZEND_ACC_PUBLIC) {
-    //                 php_printf("access: %s is public\n", ZSTR_VAL(property_name));
-    //             } else if (property_info->flags & ZEND_ACC_PROTECTED) {
-    //                 php_printf("access: %s is protected\n", ZSTR_VAL(property_name));
-    //             } else if (property_info->flags & ZEND_ACC_PRIVATE) {
-    //                 php_printf("access: %s is private\n", ZSTR_VAL(property_name));
-    //             }
-    // }
-    // continue;
+            if (property_info != NULL) {
+                if (property_info->flags & ZEND_ACC_PUBLIC) {
+                } else if (property_info->flags & ZEND_ACC_PROTECTED) {
+                } else if (property_info->flags & ZEND_ACC_PRIVATE) {
+                    property_ce = property_info->ce;
+                }
+            }
 
-    //         if (zend_hash_find(object_properties, key) == NULL) {
-    //                     zend_string *mangled_named = zend_mangle_property_name(
-    //                 ZSTR_VAL(ce->name),
-    //                 ZSTR_LEN(ce->name),
-    //                 ZSTR_VAL(key),
-    //                 ZSTR_LEN(key),
-    //                 /* persistent */ false
-    //             );
-    //             php_printf("Mangled name: %s\n", ZSTR_VAL(mangled_named));
+        try_again:
+            if (Z_TYPE_P(val) == IS_TRUE) {
+                zend_update_property_bool(property_ce,
+                                          Z_OBJ_P(retval),
+                                          ZSTR_VAL(property_name),
+                                          ZSTR_LEN(property_name),
+                                          TRUE);
+            } else if (Z_TYPE_P(val) == IS_FALSE) {
+                zend_update_property_bool(property_ce,
+                                          Z_OBJ_P(retval),
+                                          ZSTR_VAL(property_name),
+                                          ZSTR_LEN(property_name),
+                                          FALSE);
+            } else if (Z_TYPE_P(val) == IS_LONG) {
+                denormalize_long_value(property_name, property_class_name, property_ce, val, retval);
+            } else if (Z_TYPE_P(val) == IS_DOUBLE) {
+                zend_update_property_double(property_ce,
+                                            Z_OBJ_P(retval),
+                                            ZSTR_VAL(property_name),
+                                            ZSTR_LEN(property_name),
+                                            Z_DVAL_P(val));
+            } else if (Z_TYPE_P(val) == IS_STRING) {
+                denormalize_string_value(property_name, property_class_name, property_ce, val, retval);
+            } else if (Z_TYPE_P(val) == IS_ARRAY) {
+                denormalize_array_value(property_name, property_class_name, property_ce, val, retval, context);
+            } else if (Z_TYPE_P(val) == IS_REFERENCE) {
+                val = Z_REFVAL_P(val);
+                goto try_again;
+            } else {
+                ZEND_UNREACHABLE();
+            }
+        }
+        ZEND_HASH_FOREACH_END();
 
-    //         }
-    //         if (ZSTR_LEN(key) > 0 && ZSTR_VAL(key)[0] == '\0') {  // property is not public
-    //             const char *class_name, *prop_name;
-    //             size_t prop_name_len;
-
-    //             if (zend_unmangle_property_name_ex(key, &class_name, &prop_name, &prop_name_len) == SUCCESS) {
-    //                 php_printf("Unmangled property name: %s\n", class_name);
-    //                 if (class_name[0] != '*') {  // property is private
-    //                     zend_string *cname;
-    //                     zend_class_entry *ce;
-
-    //                     cname = zend_string_init(class_name, strlen(class_name), 0);
-    //                     property_ce = zend_lookup_class(cname); // get the declaring class entry of the property
-
-    //                     zend_string_release_ex(cname, 0);
-    //                 }
-    //             }
-    //         }
-
-    //     try_again:
-    //         if (Z_TYPE_P(val) == IS_TRUE) {
-    //             zend_update_property_bool(property_ce, Z_OBJ_P(retval), ZSTR_VAL(property_name), ZSTR_LEN(property_name), TRUE);
-    //         } else if (Z_TYPE_P(val) == IS_FALSE) {
-    //             zend_update_property_bool(property_ce, Z_OBJ_P(retval), ZSTR_VAL(property_name), ZSTR_LEN(property_name), FALSE);
-    //         } else if (Z_TYPE_P(val) == IS_LONG) {
-    //             denormalize_long_value(property_name, property_class_name, property_ce, val, retval);
-    //         } else if (Z_TYPE_P(val) == IS_DOUBLE) {
-    //             zend_update_property_double(property_ce,
-    //                                         Z_OBJ_P(retval),
-    //                                         ZSTR_VAL(property_name),
-    //                                         ZSTR_LEN(property_name),
-    //                                         Z_DVAL_P(val));
-    //         } else if (Z_TYPE_P(val) == IS_STRING) {
-    //             denormalize_string_value(property_name, property_class_name, property_ce, val, retval);
-    //         } else if (Z_TYPE_P(val) == IS_ARRAY) {
-    //             denormalize_array_value(property_name, property_class_name, property_ce, val, retval, context);
-    //         } else if (Z_TYPE_P(val) == IS_REFERENCE) {
-    //             val = Z_REFVAL_P(val);
-    //             goto try_again;
-    //         } else {
-    //             ZEND_UNREACHABLE();
-    //         }
-    //     }
-    //     ZEND_HASH_FOREACH_END();
-
-    //     zend_array_destroy(object_properties);
+        // zend_array_destroy(object_properties);
     }
 }
 
@@ -368,7 +344,6 @@ void denormalize_string_value(zend_string *property_name,
                 //* Dealing with an Enum
                 zval enum_value, case_value;
                 ZVAL_STR(&enum_value, Z_STR_P(val));
-                php_var_dump(&enum_value, 1);
 
                 zend_function *func = zend_hash_find_ptr(&sub_ce->function_table, ZSTR_INIT_LITERAL("tryfrom", 0));
                 if (func != NULL) {
@@ -381,15 +356,13 @@ void denormalize_string_value(zend_string *property_name,
                                              ZSTR_VAL(property_name),
                                              ZSTR_LEN(property_name),
                                              &case_value);
-                        zval_ptr_dtor(&enum_value);
-                        zval_ptr_dtor(&case_value);
                     } else {
-                        zval_ptr_dtor(&enum_value);
-                        zval_ptr_dtor(&case_value);
                         zend_value_error("\"%s\" is not a valid backing value for enum \"%s\"",
                                          Z_STRVAL_P(val),
                                          ZSTR_VAL(ce->name));
                     }
+                    zval_ptr_dtor(&enum_value);
+                    zval_ptr_dtor(&case_value);
                 }
             } else if (zend_class_implements_interface(sub_ce, php_date_get_interface_ce())) {
                 //* Dealing with dates represented as strings
@@ -843,7 +816,10 @@ ZEND_METHOD(ObjectNormalizer, denormalize)
 
     cname = zend_string_init_fast(class_name_cstr, strlen(class_name_cstr));
     ce = zend_lookup_class(cname);
-
+    if (!ce) {
+        zend_throw_error(zend_ce_value_error, "Undefined class \"%s\".", ZSTR_VAL(cname));
+        RETURN_THROWS();
+    }
     if (ce->ce_flags & ZEND_ACC_INTERFACE) {
         zend_throw_error(zend_ce_value_error, "Can not instantiate object from interface \"%s\".", ZSTR_VAL(ce->name));
         RETURN_THROWS();
