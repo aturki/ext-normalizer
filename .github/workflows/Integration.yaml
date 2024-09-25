@@ -1,0 +1,51 @@
+name: Integration
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        php-version:
+          - "8.3"
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v2
+
+      - name: "Setup PHP"
+        uses: shivammathur/setup-php@v2
+        with:
+          tools: pecl, phpize, php-config
+          php-version: "${{ matrix.php-version }}"
+
+      - name: "Build extension"
+        run: |
+          php-config --extension-dir
+          phpize
+          ./configure
+          make
+          sudo make install
+          make test TESTS="--show-diff" || exit 1
+      - name: "Show"
+        run: "php -dextension=normalizer.so --ri normalizer"
+
+      - name: "Error log"
+        if: ${{ failure() }}
+        run: "ls -1t tests/*.log | xargs -d'\n' cat"
+
+      - name: "Error diff"
+        if: ${{ failure() }}
+        run: |
+          for FILE in $(find tests -name '*.diff'); do
+            echo $FILE
+            cat $FILE
+            echo
+          done
