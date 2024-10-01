@@ -28,6 +28,11 @@ static void validate_groups(zend_attribute *attr, uint32_t target, zend_class_en
     if (scope->ce_flags & ZEND_ACC_CTOR) {
         zend_error_noreturn(E_ERROR, "Cannot apply #[Normalizer\\Groups] to readonly class %s", ZSTR_VAL(scope->name));
     }
+
+    zend_attribute_arg p = attr->args[0];
+    if (Z_TYPE(p.value) != IS_ARRAY) {
+        zend_error_noreturn(E_ERROR, "The first argument of #[Normalizer\\Groups] must be an array of strings");
+    }
 }
 
 void php_register_groups_attribute()

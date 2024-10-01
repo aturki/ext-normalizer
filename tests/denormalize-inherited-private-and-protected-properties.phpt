@@ -10,7 +10,7 @@ class ParentClass
     protected string $protected;
     private string $private;
 
-    public function __construct(string $public, string $protected, string $private)
+    public function __construct(string $public = '', string $protected = '', string $private = '')
     {
       $this->public = $public;
       $this->protected = $protected;

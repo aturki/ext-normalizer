@@ -8,10 +8,15 @@
 
 zend_class_entry *expose_attribute_class_entry;
 
-METHOD(__construct) { ZEND_PARSE_PARAMETERS_NONE(); }
 
-ZEND_BEGIN_ARG_INFO(arginfo_expose_attribute_construct, 0)
+METHOD(__construct)
+{
+	ZEND_PARSE_PARAMETERS_NONE();
+}
+
+ZEND_BEGIN_ARG_INFO(arginfo_expose_attribute___construct, 0)
 ZEND_END_ARG_INFO()
+
 
 static void validate_expose(zend_attribute *attr, uint32_t target, zend_class_entry *scope)
 {
@@ -32,12 +37,14 @@ void php_register_expose_attribute()
 {
     zend_class_entry ce, *class_entry;
 
-    zend_function_entry methods[] = {PHP_ME(Expose, __construct, arginfo_expose_attribute_construct, ZEND_ACC_PUBLIC)
-                                         PHP_FE_END};
+    zend_function_entry methods[] = {PHP_ME(Expose,
+                                            __construct,
+                                            arginfo_expose_attribute___construct,
+                                            ZEND_ACC_PUBLIC | ZEND_ACC_CTOR) PHP_FE_END};
 
     INIT_CLASS_ENTRY(ce, "Normalizer\\Expose", methods);
     class_entry = zend_register_internal_class(&ce);
-    class_entry->ce_flags |= ZEND_ACC_FINAL;
+    class_entry->ce_flags |= ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES;
 
     zend_string *attribute_name_Attribute_class_Expose_0 =
         zend_string_init_interned("Attribute", sizeof("Attribute") - 1, 1);
