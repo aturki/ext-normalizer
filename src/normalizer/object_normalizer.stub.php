@@ -18,7 +18,7 @@ class ObjectNormalizer
 
     public function __destruct() {}
 
-    public function normalize(object|array|null $object, array $context = []): array {}
+    public function normalize(object|array|null $object, array $context = []): array|null {}
 
-    public function denormalize(array|null $data, string $class, array $context = []): object {}
+    public function denormalize(array|null $data, string $class, array $context = []): object|array|null {}
 }

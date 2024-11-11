@@ -53,6 +53,7 @@ Mkfile.old
 dkms.conf
 
 playground/vendor
+benchmark
 
 Makefile
 Makefile.fragments
@@ -63,3 +64,4 @@ libtool
 *.*~
 *.log
 *.status
+autom4te.cache

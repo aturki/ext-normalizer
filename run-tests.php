@@ -611,7 +611,7 @@ function main(): void
                     $show_progress = false;
                     break;
                 case '--version':
-                    echo '$Id: 71a8fdc80fe5f1e2b35790f564122648735cbcf1 $' . "\n";
+                    echo '$Id: 3f5d3563c7f70f0c6c90eda82d0f4f2ec2b0802a $' . "\n";
                     exit(1);
 
                 default:
@@ -1177,7 +1177,7 @@ function system_with_timeout(
     // and on Windows quotes are discarded, this is a fix to honor the quotes and allow values containing
     // spaces like '"C:\Program Files\PHP\php.exe"' to be passed as 1 argument correctly
     if (IS_WINDOWS) {
-        $commandline = 'start "" /b /wait ' . $commandline;
+        $commandline = 'start "" /b /wait ' . $commandline . ' & exit';
     }
 
     $data = '';

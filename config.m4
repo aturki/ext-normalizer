@@ -1,6 +1,9 @@
 PHP_ARG_ENABLE(normalizer, whether to enable the normalizer extension,
 [  --enable-normalizer   Enable normalizer extension])
 
+PHP_REQUIRE_CXX()
+PHP_ADD_LIBRARY(stdc++, 1, NORMALIZER_SHARED_LIBADD)
+
 if test "$PHP_NORMALIZER" != "no"; then
     PHP_NEW_EXTENSION(
         normalizer,

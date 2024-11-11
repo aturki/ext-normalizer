@@ -65,72 +65,69 @@ bool check_array_intersection_string(zval *arr1, zval *arr2)
 }
 
 
-void print_array(zend_array* arr)
+void print_array(zend_array* arr, int level)
 {
-    for (int i = 0; i < arr->nNumOfElements; ++i)
-    {
-        Bucket b = arr->arData[i];
-
-        php_printf("{%s: %s}\n", ZSTR_VAL(b.key), ZSTR_VAL(b.val.value.str));
-    }
+    zval zv;
+    ZVAL_ARR(&zv, arr);
+    php_var_dump(&zv, level);
 }
 
 
 void log_zend_attribute(zend_attribute *attr) {
     // Check if the attribute is valid
-    if (!attr) {
-        php_printf("zend_attribute is NULL\n");
-        return;
-    }
+    // if (!attr) {
+    //     php_printf("zend_attribute is NULL\n");
+    //     return;
+    // }
 
-    // Log the attribute name
-    if (attr->name) {
-        php_printf("Attribute Name: %s\n", ZSTR_VAL(attr->name));
-    } else {
-        php_printf("Attribute Name is NULL\n");
-    }
+    // // Log the attribute name
+    // if (attr->name) {
+    //     php_printf("Attribute Name: %s\n", ZSTR_VAL(attr->name));
+    // } else {
+    //     php_printf("Attribute Name is NULL\n");
+    // }
 
-    // Log the lowercase name (if available)
-    if (attr->lcname) {
-        php_printf("Attribute Lowercase Name: %s\n", ZSTR_VAL(attr->lcname));
-    } else {
-        php_printf("Attribute Lowercase Name is NULL\n");
-    }
+    // // Log the lowercase name (if available)
+    // if (attr->lcname) {
+    //     php_printf("Attribute Lowercase Name: %s\n", ZSTR_VAL(attr->lcname));
+    // } else {
+    //     php_printf("Attribute Lowercase Name is NULL\n");
+    // }
 
-    // Log the number of arguments
-    php_printf("Argument Count: %u\n", attr->argc);
+    // // Log the number of arguments
+    // php_printf("Argument Count: %u\n", attr->argc);
 
-    // Log each argument
-    for (uint32_t i = 0; i < attr->argc; i++) {
-        zval *arg = &attr->args[i].value;
+    // // Log each argument
+    // for (uint32_t i = 0; i < attr->argc; i++) {
+    //     zval *arg = &attr->args[i].value;
 
-        php_printf("Argument %u: ", i);
-        switch (Z_TYPE_P(arg)) {
-            case IS_STRING:
-                php_printf("String: %s\n", Z_STRVAL_P(arg));
-                break;
-            case IS_LONG:
-                php_printf("Long: %ld\n", Z_LVAL_P(arg));
-                break;
-            case IS_DOUBLE:
-                php_printf("Double: %f\n", Z_DVAL_P(arg));
-                break;
-            case IS_TRUE:
-            case IS_FALSE:
-                php_printf("Boolean: %s\n", Z_TYPE_P(arg) == IS_TRUE ? "true" : "false");
-                break;
-            default:
-                php_printf("Unknown Type (%d)\n", Z_TYPE_P(arg));
-                break;
-        }
-    }
+    //     php_printf("Argument %u: ", i);
+    //     switch (Z_TYPE_P(arg)) {
+    //         case IS_STRING:
+    //             php_printf("String: %s\n", Z_STRVAL_P(arg));
+    //             break;
+    //         case IS_LONG:
+    //             php_printf("Long: %ld\n", Z_LVAL_P(arg));
+    //             break;
+    //         case IS_DOUBLE:
+    //             php_printf("Double: %f\n", Z_DVAL_P(arg));
+    //             break;
+    //         case IS_TRUE:
+    //         case IS_FALSE:
+    //             php_printf("Boolean: %s\n", Z_TYPE_P(arg) == IS_TRUE ? "true" : "false");
+    //             break;
+    //         default:
+    //             php_printf("Unknown Type (%d)\n", Z_TYPE_P(arg));
+    //             break;
+    //     }
+    // }
 
-    // Log the flags
-    php_printf("Flags: %u\n", attr->flags);
+    // // Log the flags
+    // php_printf("Flags: %u\n", attr->flags);
 
-    // Log the offset (used for property attributes)
-    php_printf("Offset: %u\n", attr->offset);
+    // // Log the offset (used for property attributes)
+    // php_printf("Offset: %u\n", attr->offset);
 
-    // Separator for readability
-    php_printf("-----------------\n");
+    // // Separator for readability
+    // php_printf("-----------------\n");
 }

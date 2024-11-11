@@ -2,6 +2,7 @@
 #include "config.h"
 #endif
 
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -17,14 +18,21 @@
 #include "src/attributes/normalizer_attributes.h"
 #include "src/normalizer/object_normalizer_ce.h"
 
+BEGIN_EXTERN_C()
+PHP_MINIT_FUNCTION(normalizer);
+PHP_MSHUTDOWN_FUNCTION(normalizer);
+PHP_RINIT_FUNCTION(normalizer);
+PHP_RSHUTDOWN_FUNCTION(normalizer);
+PHP_MINFO_FUNCTION(normalizer);
+END_EXTERN_C()
 
 zend_module_entry normalizer_module_entry = {STANDARD_MODULE_HEADER,
                                              "normalizer",
-                                             NULL, // Register functions
+                                             NULL,  // Register functions
                                              PHP_MINIT(normalizer),
                                              PHP_MSHUTDOWN(normalizer),
-                                             PHP_RINIT(normalizer),     // Request init
-                                             PHP_RSHUTDOWN(normalizer), // Request shutdown
+                                             PHP_RINIT(normalizer),      // Request init
+                                             PHP_RSHUTDOWN(normalizer),  // Request shutdown
                                              PHP_MINFO(normalizer),
                                              PHP_NORMALIZER_VERSION,
                                              STANDARD_MODULE_PROPERTIES};
@@ -32,7 +40,6 @@ zend_module_entry normalizer_module_entry = {STANDARD_MODULE_HEADER,
 #ifdef COMPILE_DL_NORMALIZER
 ZEND_GET_MODULE(normalizer)
 #endif
-
 
 PHP_MINIT_FUNCTION(normalizer)
 {
@@ -47,10 +54,7 @@ PHP_MINIT_FUNCTION(normalizer)
     return SUCCESS;
 }
 
-PHP_MSHUTDOWN_FUNCTION(normalizer)
-{
-    return SUCCESS;
-}
+PHP_MSHUTDOWN_FUNCTION(normalizer) { return SUCCESS; }
 
 PHP_RINIT_FUNCTION(normalizer)
 {
@@ -60,10 +64,7 @@ PHP_RINIT_FUNCTION(normalizer)
     return SUCCESS;
 }
 
-PHP_RSHUTDOWN_FUNCTION(normalizer)
-{
-    return SUCCESS;
-}
+PHP_RSHUTDOWN_FUNCTION(normalizer) { return SUCCESS; }
 
 PHP_MINFO_FUNCTION(normalizer)
 {

@@ -10,6 +10,6 @@
 void trim(char *str);
 char *extract_template_type(const char *input);
 bool check_array_intersection_string(zval *arr1, zval *arr2);
-void print_array(zend_array* arr);
+void print_array(zend_array* arr, int level);
 void log_zend_attribute(zend_attribute *attr);
 #endif  // HELPERS_H

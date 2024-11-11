@@ -34,11 +34,10 @@ enum Type: string {
     case ADMIN = 'admin';
 }
 
-
-// dd(class_exists(SfGroups::class));
 class Address
 {
     #[SfGroups(['GROUP_1'])]
+    #[Expose()]
     public string $street;
     #[SfGroups(['GROUP_1'])]
     public string  $city;
@@ -65,17 +64,25 @@ class User
     #[Ignore()]
     private int $age;
 
-    #[SfGroups(['GROUP_1'])]
+    #[Expose()]
     public Address $address;
 
     // /** @var array<Address> */
     // #[SfGroups(['GROUP_2'])]
     // public array $addresses = [];
-
+    #[Expose()]
     public array $roles = ['ROLE_1', 'ROLE_2'];
 
     #[Expose()]
+    public Type $type = Type::ADMIN;
+
+    #[Expose()]
     public \DateTime $date;
+
+    public function getAddress(): Address
+    {
+        return $this->address;
+    }
 
     public function __construct($name = '', $email = '', $age = 0, $address = new Address())
     {
@@ -99,14 +106,14 @@ class User
     }
 }
 
-$extractor = new PropertyInfoExtractor([new ReflectionExtractor()], [new PhpDocExtractor(), new ReflectionExtractor(),]);
+// $extractor = new PropertyInfoExtractor([new ReflectionExtractor()], [new PhpDocExtractor(), new ReflectionExtractor(),]);
 
-$normalizer = new ObjectNormalizer(null, null, null, $extractor);
+// $normalizer = new ObjectNormalizer(null, null, null, $extractor);
 
-$arrayDenormalizer = (new ArrayDenormalizer());
-$arrayDenormalizer->setDenormalizer($normalizer);
-$serializer = new Serializer([$normalizer, $arrayDenormalizer, new DateTimeNormalizer()]);
-$normalizer->setSerializer($serializer);
+// $arrayDenormalizer = (new ArrayDenormalizer());
+// $arrayDenormalizer->setDenormalizer($normalizer);
+// $serializer = new Serializer([$normalizer, $arrayDenormalizer, new DateTimeNormalizer()]);
+// $normalizer->setSerializer($serializer);
 
 
 $nativeNormalizer = new NativeNormalizer(['use_symfony_attributes' => true]);
@@ -123,15 +130,15 @@ for ($i = 0; $i < 1; $i++) {
 }
 
 
-$currentMemory = memory_get_usage();
-$sfNormalizationStart = microtime(true);
-$normalized = $serializer->normalize($users);
-$sfNormalizationEnd = microtime(true);
-$sfNormalizationMemory = (memory_get_usage() - $currentMemory) / 1024 / 1024;
+// $currentMemory = memory_get_usage();
+// $sfNormalizationStart = microtime(true);
+// $normalized = $serializer->normalize($users);
+// $sfNormalizationEnd = microtime(true);
+// $sfNormalizationMemory = (memory_get_usage() - $currentMemory) / 1024 / 1024;
 // dump("Symfony", $normalized);
 
-$currentMemory = memory_get_usage();
-$nativeNormalizationStart = microtime(true);
+// $currentMemory = memory_get_usage();
+// $nativeNormalizationStart = microtime(true);
 $normalized = $nativeNormalizer->normalize(
     $users,
     [
@@ -140,34 +147,35 @@ $normalized = $nativeNormalizer->normalize(
         // NativeNormalizer::SKIP_UNINITIALIZED_VALUES => true,
     ]
 );
-$nativeNormalizationEnd = microtime(true);
-$nativeNormalizationMemory = (memory_get_usage() - $currentMemory) / 1024 / 1024;
+// $nativeNormalizationEnd = microtime(true);
+// $nativeNormalizationMemory = (memory_get_usage() - $currentMemory) / 1024 / 1024;
+var_dump($normalized);
 // dump("Native", $normalized);
-$normalized[0]['roles'] = ['admin'];
+// $normalized[0]['roles'] = ['admin'];
 
 // foreach ($normalized as &$item) {
 //     $item['date'] = "2024-01-01";
 // }
-$currentMemory = memory_get_usage();
-$nativeDenormalizationStart = microtime(true);
-$denormalized = $nativeNormalizer->denormalize($normalized, User::class . '[]');
-$nativeDenormalizationEnd = microtime(true);
-$nativeDenormalizationMemory = (memory_get_usage() - $currentMemory) / 1024 / 1024;
+// $currentMemory = memory_get_usage();
+// $nativeDenormalizationStart = microtime(true);
+// $denormalized = $nativeNormalizer->denormalize($normalized, User::class . '[]');
+// $nativeDenormalizationEnd = microtime(true);
+// $nativeDenormalizationMemory = (memory_get_usage() - $currentMemory) / 1024 / 1024;
 // dump($denormalized);
-$currentMemory = memory_get_usage();
-$sfDenormalizationStart = microtime(true);
-$denormalized = $normalizer->denormalize($normalized, User::class);
-$sfDenormalizationEnd = microtime(true);
-$sfDenormalizationMemory = (memory_get_usage() - $currentMemory) / 1024 / 1024;
+// $currentMemory = memory_get_usage();
+// $sfDenormalizationStart = microtime(true);
+// $denormalized = $normalizer->denormalize($normalized, User::class);
+// $sfDenormalizationEnd = microtime(true);
+// $sfDenormalizationMemory = (memory_get_usage() - $currentMemory) / 1024 / 1024;
 
 // dump($denormalized);
 
 
-echo sprintf("Native Normalization(s):     %f, Memory (MB): %f\n", ($nativeNormalizationEnd - $nativeNormalizationStart), $nativeNormalizationMemory);
-echo sprintf("Symfony Normalization(s):    %f, Memory (MB): %f\n", ($sfNormalizationEnd - $sfNormalizationStart), $sfNormalizationMemory);
-echo "\n\n";
-echo sprintf("Native Normalization(s):     %f, Memory (MB): %f\n", ($nativeDenormalizationEnd - $nativeDenormalizationStart), $nativeDenormalizationMemory);
-echo sprintf("Symfony Normalization(s):    %f, Memory (MB): %f\n", ($sfDenormalizationEnd - $sfDenormalizationStart), $sfDenormalizationMemory);
+// echo sprintf("Native Normalization(s):     %f, Memory (MB): %f\n", ($nativeNormalizationEnd - $nativeNormalizationStart), $nativeNormalizationMemory);
+// echo sprintf("Symfony Normalization(s):    %f, Memory (MB): %f\n", ($sfNormalizationEnd - $sfNormalizationStart), $sfNormalizationMemory);
+// echo "\n\n";
+// echo sprintf("Native Normalization(s):     %f, Memory (MB): %f\n", ($nativeDenormalizationEnd - $nativeDenormalizationStart), $nativeDenormalizationMemory);
+// echo sprintf("Symfony Normalization(s):    %f, Memory (MB): %f\n", ($sfDenormalizationEnd - $sfDenormalizationStart), $sfDenormalizationMemory);
 
 
 // Native Normalization:    0.000023s
