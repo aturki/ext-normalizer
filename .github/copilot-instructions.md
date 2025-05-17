@@ -31,6 +31,8 @@ src/
 tests/
 ```
 
+Ignore all files in the `.history` directory.
+
 ## 🧶 Patterns
 
 ### ✅ Patterns to Follow

@@ -428,7 +428,85 @@ void normalize_object(zval *input, zend_array *context, zval *retval)
                             } else {
                                 zval sub_object;
                                 ZVAL_UNDEF(&sub_object);
-                                normalize_object(val_to_process, context, &sub_object);
+                                
+                                // Check for MaxDepth attribute
+                                zval *enable_max_depth = zend_hash_str_find(context, ENABLE_MAX_DEPTH_VALUE, strlen(ENABLE_MAX_DEPTH_VALUE));
+                                bool should_normalize_nested = TRUE;
+                                
+                                if (enable_max_depth && Z_TYPE_P(enable_max_depth) == IS_TRUE && prop_attributes) {
+                                    zend_attribute *max_depth_attr = zend_get_attribute_str(prop_attributes, MAX_DEPTH_ATTRIBUTE, strlen(MAX_DEPTH_ATTRIBUTE));
+                                    if (max_depth_attr && max_depth_attr->argc > 0) {
+                                        // Get the max depth value from the attribute
+                                        zval max_depth_value;
+                                        ZVAL_UNDEF(&max_depth_value);
+                                        
+                                        if (FAILURE != zend_get_attribute_value(&max_depth_value, max_depth_attr, 0, NULL)) {
+                                            // Get or create property path tracking in context
+                                            zval *property_path = zend_hash_str_find(context, "property_path", strlen("property_path"));
+                                            zval new_context;
+                                            array_init(&new_context);
+                                            
+                                            // Copy original context values to new context
+                                            zend_string *key;
+                                            zval *val;
+                                            ZEND_HASH_FOREACH_STR_KEY_VAL(context, key, val) {
+                                                if (key) {
+                                                    Z_TRY_ADDREF_P(val);
+                                                    zend_hash_add(Z_ARRVAL(new_context), key, val);
+                                                }
+                                            } ZEND_HASH_FOREACH_END();
+                                            
+                                            // Check property path or initialize it
+                                            zval property_path_arr;
+                                            if (property_path && Z_TYPE_P(property_path) == IS_ARRAY) {
+                                                // Copy existing property path
+                                                ZVAL_DUP(&property_path_arr, property_path);
+                                            } else {
+                                                // Create new property path
+                                                array_init(&property_path_arr);
+                                            }
+                                            
+                                            // Check current depth for this property
+                                            int current_depth = 0;
+                                            zval *current_path = zend_hash_str_find(Z_ARRVAL(property_path_arr), ZSTR_VAL(unmangled_name), ZSTR_LEN(unmangled_name));
+                                            
+                                            if (current_path && Z_TYPE_P(current_path) == IS_LONG) {
+                                                current_depth = Z_LVAL_P(current_path) + 1;
+                                            }
+                                            
+                                            // Update the property path with incremented depth
+                                            zval depth_zv;
+                                            ZVAL_LONG(&depth_zv, current_depth);
+                                            zend_hash_str_update(Z_ARRVAL(property_path_arr), ZSTR_VAL(unmangled_name), ZSTR_LEN(unmangled_name), &depth_zv);
+                                            
+                                            // Add updated property path to context
+                                            zend_hash_str_update(Z_ARRVAL(new_context), "property_path", strlen("property_path"), &property_path_arr);
+                                            
+                                            // Check if we've reached max depth
+                                            if (current_depth >= Z_LVAL(max_depth_value)) {
+                                                // We've reached max depth, don't normalize nested object
+                                                should_normalize_nested = FALSE;
+                                                array_init(&sub_object);
+                                            } else {
+                                                // Continue normalization with the new context that includes path tracking
+                                                normalize_object(val_to_process, Z_ARRVAL(new_context), &sub_object);
+                                            }
+                                            
+                                            zval_ptr_dtor(&new_context);
+                                            zval_ptr_dtor(&max_depth_value);
+                                        } else {
+                                            // Couldn't get attribute value, normalize normally
+                                            normalize_object(val_to_process, context, &sub_object);
+                                        }
+                                    } else {
+                                        // No MaxDepth attribute, normalize normally
+                                        normalize_object(val_to_process, context, &sub_object);
+                                    }
+                                } else {
+                                    // MaxDepth not enabled, normalize normally
+                                    normalize_object(val_to_process, context, &sub_object);
+                                }
+                                
                                 add_assoc_zval(retval, ZSTR_VAL(normalized_name), &sub_object);
                             }
                             break;
@@ -1103,6 +1181,10 @@ void register_object_normalizer_class()
     DECLARE_CLASS_STRING_CONSTANT(object_normalizer_class_entry,
                                   SKIP_UNINITIALIZED_VALUES,
                                   SKIP_UNINITIALIZED_VALUES,
+                                  ZEND_ACC_PUBLIC);
+    DECLARE_CLASS_STRING_CONSTANT(object_normalizer_class_entry,
+                                  ENABLE_MAX_DEPTH,
+                                  ENABLE_MAX_DEPTH_VALUE, 
                                   ZEND_ACC_PUBLIC);
 
     ZVAL_EMPTY_ARRAY(&property_options_default_value);
