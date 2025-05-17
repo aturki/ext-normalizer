@@ -611,7 +611,7 @@ function main(): void
                     $show_progress = false;
                     break;
                 case '--version':
-                    echo '$Id: 3f5d3563c7f70f0c6c90eda82d0f4f2ec2b0802a $' . "\n";
+                    echo '$Id: 2716f2a520a743f47b551664a9ca19e6c13b3121 $' . "\n";
                     exit(1);
 
                 default:
@@ -2218,6 +2218,9 @@ TEST $file
         } elseif (!strncasecmp('xleak', $output, 5)) {
             // Pretend we have an XLEAK section
             $test->setSection('XLEAK', ltrim(substr($output, 5)));
+        } elseif (!strncasecmp('flaky', $output, 5)) {
+            // Pretend we have a FLAKY section
+            $test->setSection('FLAKY', ltrim(substr($output, 5)));
         } elseif ($output !== '') {
             show_result("BORK", $output, $tested_file, 'reason: invalid output from SKIPIF', $temp_filenames);
             $PHP_FAILED_TESTS['BORKED'][] = [

@@ -4,13 +4,14 @@ echo - Can normalize an object with an array of sub objects
 <?php if (!extension_loaded('normalizer')) die('skip ext/normalizer must be installed'); ?>
 --FILE--
 <?php
+use Normalizer\Groups;
 
 class B
 {
-  #[Symfony\Component\Serializer\Annotation\Groups(['GROUP_1'])]
+  #[Groups(['GROUP_1'])]
   public string $foo = 'foo';
 
-  #[Symfony\Component\Serializer\Attribute\Groups(['GROUP_1'])]
+  #[Groups(['GROUP_1'])]
   public string $bar = 'bar';
 
   public function __construct(string $foo, string $bar)
@@ -22,7 +23,7 @@ class B
 
 class A
 {
-    #[Symfony\Component\Serializer\Attribute\Groups(['GROUP_1'])]
+    #[Groups(['GROUP_1'])]
     public array $bs;
 
 

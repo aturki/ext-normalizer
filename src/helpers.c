@@ -49,17 +49,19 @@ char *extract_template_type(const char *input)
 
 bool check_array_intersection_string(zval *arr1, zval *arr2)
 {
-    // php_var_dump(arr1, 10);
-    // php_var_dump(arr2, 40);
-    for (int i = 0; i < Z_ARRVAL_P(arr1)->nNumOfElements; i++) {
-        Bucket b1 = Z_ARRVAL_P(arr1)->arData[i];
-        for (int j = 0; j < Z_ARRVAL_P(arr2)->nNumOfElements; j++) {
-            Bucket b2 = Z_ARRVAL_P(arr2)->arData[j];
-            if (zend_string_equals(b1.val.value.str, b2.val.value.str)) {
-                return TRUE;
-            }
-        }
+     zval *val;
+    // print_array(Z_ARRVAL_P(arr1), 10);
+    // print_array(Z_ARRVAL_P(arr2), 10);
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(arr1), val)
+    {
+        // php_var_dump(val, 10);
+        // if (Z_TYPE_P(val) == IS_STRING) {
+        //     if (zend_hash_exists(Z_ARRVAL_P(arr2), Z_STR_P(val))) {
+        //         return TRUE;
+        //     }
+        // }
     }
+    ZEND_HASH_FOREACH_END();
 
     return FALSE;
 }
