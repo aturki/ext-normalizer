@@ -65,3 +65,4 @@ libtool
 *.log
 *.status
 autom4te.cache
+.libs/

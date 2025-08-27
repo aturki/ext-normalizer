@@ -1,12 +1,10 @@
 name: Integration
 
 on:
-  push:
-    branches:
-      - main
+  push:   # run on every branch push
+    branches: ['**']
   pull_request:
-    branches:
-      - main
+    branches: ['main']
 
 jobs:
   build:
@@ -14,28 +12,32 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        php-version:
-          - "8.3"
+        php-version: ["8.3", "8.4"]
     steps:
-      - name: "Checkout"
-        uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: "Setup PHP"
+      - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
+          php-version: ${{ matrix.php-version }}
           tools: pecl, phpize, php-config
-          php-version: "${{ matrix.php-version }}"
+          coverage: none
 
-      - name: "Build extension"
+      - name: Build & Test extension
         run: |
+          set -e
+          php -v
           php-config --extension-dir
           phpize
           ./configure
-          make
+          make -j"$(getconf _NPROCESSORS_ONLN)"
           sudo make install
+          echo "extension=normalizer.so" > normalizer.ini
+          php -d zend.assertions=1 -d assert.exception=1 -dextension=normalizer.so --ri normalizer
           make test TESTS="--show-diff" || exit 1
-      - name: "Show"
-        run: "php -dextension=normalizer.so --ri normalizer"
+      - name: Show extension info
+        run: php -dextension=normalizer.so --ri normalizer
 
       - name: "Error log"
         if: ${{ failure() }}

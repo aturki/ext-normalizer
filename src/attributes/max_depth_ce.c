@@ -9,9 +9,21 @@
 
 zend_class_entry *max_depth_attribute_class_entry;
 
-METHOD(__construct) { ZEND_PARSE_PARAMETERS_NONE(); }
+METHOD(__construct) {
+    zend_long depth;
 
-ZEND_BEGIN_ARG_INFO(arginfo_max_depth_attribute_construct, 0)
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_LONG(depth)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (depth <= 0) {
+        zend_value_error("MaxDepth value must be greater than 0");
+        return;
+    }
+}
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_max_depth_attribute_construct, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, depth, IS_LONG, 0)
 ZEND_END_ARG_INFO()
 
 static void validate_max_depth(zend_attribute *attr, uint32_t target, zend_class_entry *scope)
@@ -26,6 +38,15 @@ static void validate_max_depth(zend_attribute *attr, uint32_t target, zend_class
         zend_error_noreturn(E_ERROR,
                             "Cannot apply #[Normalizer\\MaxDepth] to readonly class %s",
                             ZSTR_VAL(scope->name));
+    }
+
+    // Validate that the attribute has the required depth argument
+    if (attr->argc != 1 || Z_TYPE(attr->args[0].value) != IS_LONG) {
+        zend_error_noreturn(E_ERROR, "MaxDepth attribute requires a single integer argument");
+    }
+
+    if (Z_LVAL(attr->args[0].value) <= 0) {
+        zend_error_noreturn(E_ERROR, "MaxDepth value must be greater than 0");
     }
 }
 

@@ -1,7 +1,8 @@
 /* config.h.  Generated from config.h.in by configure.  */
 /* config.h.in.  Generated from configure.ac by autoheader.  */
 
-/* Whether to build normalizer as dynamic module */
+/* Define to 1 if the PHP extension 'normalizer' is built as a dynamic module.
+   */
 #define COMPILE_DL_NORMALIZER 1
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
